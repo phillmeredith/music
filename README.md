@@ -114,3 +114,19 @@ Differences on purpose:
 
 Code in `engine/vendor/fm1open/` is Apache-2.0 (see its NOTICE.md). The rest of
 this repository has no licence chosen yet.
+
+## Deploy (music.phillm.dev)
+
+The live site is a small Cloudflare Worker called `music` on the phillm.dev
+zone. It serves the files on this repo's `gh-pages` branch (fetched from
+raw.githubusercontent.com, cached for two minutes) with the right content types.
+
+To publish, copy `web/` onto `gh-pages` and push:
+
+```sh
+git worktree add /tmp/ghp gh-pages
+rsync -a --delete --exclude .git --exclude CNAME --exclude .nojekyll web/ /tmp/ghp/
+cd /tmp/ghp && git add -A && git commit -m "Publish" && git push
+```
+
+Bump `VERSION` in `web/sw.js` first so installed copies update.
