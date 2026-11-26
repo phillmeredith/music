@@ -31,6 +31,14 @@ export class Guide {
     this.rings = el('div', 'guide-rings', this.layer);
     this.card = el('div', 'guide-card', this.layer);
     this.card.addEventListener('pointerdown', (e) => e.stopPropagation());
+    // each new card starts at the top of the screen
+    new MutationObserver(() => { this.card.scrollTop = 0; }).observe(this.card, { childList: true });
+    // hold the eye to see the real screen under the card
+    this.peek = el('button', 'g-peek', this.layer, '👁');
+    this.peek.setAttribute('aria-label', 'Hold to see the screen');
+    const peek = (on) => (e) => { e.preventDefault(); e.stopPropagation(); this.card.classList.toggle('peeking', on); };
+    this.peek.addEventListener('pointerdown', peek(true));
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => this.peek.addEventListener(t, peek(false)));
     this.launcher = el('button', 'guide-launch', document.body, '<span>?</span><b>Learn</b>');
     this.launcher.setAttribute('aria-label', 'Open lessons');
     this.launcher.addEventListener('click', () => (this.lesson || this.songLesson ? this.stop() : this.menu()));
@@ -310,7 +318,37 @@ export class Guide {
   }
 
   // ------------------------------------------------------------ per frame
+  // the Learn interface lives on the device screen: lay the card exactly over
+  // the display, scaled with the panel, and in menus dim all but the screen
+  fitCard() {
+    if (this.layer.hidden) return;
+    const cv = document.querySelector('.bezel .screen');
+    if (!cv) return;
+    const r = cv.getBoundingClientRect(), k = r.width / 221;
+    const key = [r.x, r.y, k].map((v) => v.toFixed(2)).join(',');
+    if (key !== this.fitKey) {
+      this.fitKey = key;
+      this.card.style.setProperty('--gx', r.x + 'px');
+      this.card.style.setProperty('--gy', r.y + 'px');
+      this.card.style.setProperty('--gs', k);
+      const b = document.querySelector('.bezel').getBoundingClientRect();
+      this.peek.style.left = b.right - 34 * k + 'px'; this.peek.style.top = r.bottom + 2 * k + 'px';
+      this.peek.style.transform = `scale(${k})`;
+    }
+    if (this.layer.classList.contains('modal')) {
+      const vw = window.innerWidth, vh = window.innerHeight, b = document.querySelector('.bezel').getBoundingClientRect();
+      const mk = 'modal' + vw + vh + key;
+      if (this.ringKey !== mk) {
+        this.ringKey = mk; this.rings.innerHTML = '';
+        this.svg.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
+        this.svg.innerHTML = `<defs><mask id="g-mask"><rect width="${vw}" height="${vh}" fill="#fff"/><rect x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="${40 * k}" fill="#000"/></mask></defs>
+          <rect width="${vw}" height="${vh}" fill="rgba(20,14,8,.55)" mask="url(#g-mask)"/>`;
+      }
+    }
+  }
+
   tick() {
+    this.fitCard();
     if (!this.lesson) return;
     const st = this.step(), app = this.app, now = performance.now();
     if (!st) return;
@@ -404,25 +442,6 @@ export class Guide {
         if (hint && n === 0) el('span', 'g-hint', g, hint);
       });
     }
-    if (this.card.classList.contains('centre')) { this.card.style.left = ''; this.card.style.top = ''; return; }
-    // card: try the corners and edges, keep clear of targets and the screen
-    const cw = this.card.offsetWidth, ch = this.card.offsetHeight, m = 10, top = 52; // clear of the Learn button
-    const scr = document.querySelector('.bezel');
-    const lb = this.launcher.getBoundingClientRect();
-    const avoid = rects.concat(scr ? [scr.getBoundingClientRect()] : [], [lb]);
-    const spots = [
-      [vw - cw - m, top], [m, top], [vw - cw - m, vh - ch - m], [m, vh - ch - m],
-      [(vw - cw) / 2, vh - ch - m], [(vw - cw) / 2, top],
-    ];
-    const overlap = (x, y) => avoid.reduce((s, r) => {
-      const ox = Math.max(0, Math.min(x + cw, r.right + 6) - Math.max(x, r.left - 6));
-      const oy = Math.max(0, Math.min(y + ch, r.bottom + 6) - Math.max(y, r.top - 6));
-      return s + ox * oy;
-    }, 0);
-    let best = spots[0], bestO = Infinity;
-    for (const s of spots) { const o = overlap(s[0], s[1]); if (o < bestO) { bestO = o; best = s; } if (o === 0) break; }
-    this.card.style.left = Math.max(m, best[0]) + 'px';
-    this.card.style.top = Math.max(m, best[1]) + 'px';
   }
 }
 
