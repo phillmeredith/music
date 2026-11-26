@@ -24,6 +24,7 @@ const R = {
   recOff: { ok: (a) => !sv(a, P.P_SEQ_REC), text: 'Press REC to stop recording', target: T.btn('REC') },
   page: (n) => ({
     ok: (a) => (a.pageIdx[a.modeKey()] || 0) === n,
+    fix: (a) => { a.pageIdx[a.modeKey()] = n; },
     text: `Turn SELECT to page ${n + 1}`,
     target: T.knob('SELECT'),
     hint: (a) => turn(a.pageIdx[a.modeKey()] || 0, n),
@@ -31,6 +32,7 @@ const R = {
   }),
   pattern: (n) => ({
     ok: (a) => sv(a, P.P_SEQ_PATTERN) === n,
+    fix: (a) => setSeq(a, 0, 1, n),
     text: `Turn KNOB1 to Pattern ${n + 1}`,
     target: T.knob('KNOB1'),
     hint: (a) => turn(sv(a, P.P_SEQ_PATTERN), n),
@@ -45,6 +47,12 @@ const R = {
   fxSel: (n, name) => ({ ok: (a) => a.s.fx.order[a.fxSel] === n, text: `Turn SELECT to ${name}`, target: T.knob('SELECT'),
     hint: (a) => turn(a.fxSel, a.s.fx.order.indexOf(n)) }),
 };
+// set a sequencer knob exactly as turning it would (page, knob 1-4, value)
+function setSeq(a, page, knob, v) {
+  a.pageIdx.SEQ = page;
+  const pg = a.pagesFor('SEQ')[page], prm = pg && pg.params[knob - 1];
+  if (prm && prm.set) prm.set(v);
+}
 // the page a sequencer knob lives on
 const seqPage = (n) => [R.noArp, R.seq, R.steps, R.page(n)];
 
@@ -61,6 +69,8 @@ function seqKnob(section, { page, knob, label, id, goal, fmt = (x) => x, why, ex
     goal: `${label}: ${fmt(goal)}`,
     hint: (a) => turn(sv(a, id), goal),
     quick: true,
+    // seen once: the guide does it while he watches; twice: his turn; after that it's done for him
+    kind: 'knob:' + label, doIt: (a) => setSeq(a, page, knob, goal),
   };
 }
 // choose a sound for the current voice with PRESETS
@@ -75,6 +85,7 @@ function preset(section, voice, idx, name, why) {
     now: (a) => `${String(a.s.parts[voice].preset + 1).padStart(3, '0')} ${a.store.presetName(a.s.parts[voice].preset)}`,
     goal: `${String(idx + 1).padStart(3, '0')} ${name}`,
     hint: (a) => turn(a.s.parts[voice].preset, idx),
+    kind: 'preset', doIt: (a) => { a.store.loadPreset(voice, idx); a.store.touch && a.store.touch(); },
   };
 }
 // record a chord or a note on one step
@@ -159,13 +170,21 @@ const checkpoint = (section, pat, why) => ({
 });
 
 // ---------- the lofi lesson
-const S1 = '1 · Get ready', S2 = '2 · Chords', S3 = '3 · Bass', S4 = '4 · Kick drum', S5 = '5 · Snare', S6 = '6 · Hi-hats', S7 = '7 · Make it a song', S8 = '8 · Lofi sound';
+const S0 = '0 · Warm up', S1 = '1 · Get ready', S2 = '2 · Chords', S3 = '3 · Bass', S4 = '4 · Kick drum', S5 = '5 · Snare', S6 = '6 · Hi-hats', S7 = '7 · Make it a song', S8 = '8 · Lofi sound';
 const CHORDS = [
   { name: 'F major 7', keys: [0, 4, 7, 11], notes: [53, 57, 60, 64] },
   { name: 'E minor 7', keys: [2, 6, 9, 11], notes: [55, 59, 62, 64] },
   { name: 'D minor 7', keys: [0, 4, 7, 9], notes: [53, 57, 60, 62] },
   { name: 'C major 7', keys: [2, 6, 7, 11], notes: [55, 59, 60, 64] },
 ];
+// play a chord straight away, no setup: it's shown (white), then his turn (yellow)
+const warm = (c, i) => ({
+  section: S0, demo: { keys: c.keys, oct: 0 }, target: c.keys.map(T.key),
+  text: i === 0 ? 'Hold the 4 glowing keys down together' : 'Now this one: hold the 4 glowing keys',
+  why: i === 0 ? `That’s ${c.name}, a dreamy jazz chord. This whole beat is built from four chords like it.` : i === 3 ? `${c.name}. Those are all four chords of the song!` : c.name,
+  requires: [R.noArp, R.octave(0)],
+  done: (a) => c.keys.every((k) => a.heldKeys.has(k)), quick: true,
+});
 const BASS = [{ key: 12, note: 41 }, { key: 11, note: 40 }, { key: 9, note: 38 }, { key: 7, note: 36 }];
 
 const lofi = {
@@ -183,17 +202,23 @@ const lofi = {
     const lv = [65, 100, 100, 90, 70];
     lv.forEach((l, p) => { a.s.parts[p].level = l; a.store.partParam(p, P.PP_LEVEL, l); });
     a.s.ui.curPart = 0;
+    a.seqOff();
+    // the chord sound, so the very first keys he presses sound lovely
+    a.store.loadPreset(0, 33);
+    if (!a.s.parts[0].on) { a.s.parts[0].on = 1; a.store.partParam(0, P.PP_ON, 1); }
     a.setMode('HOME'); a.seqView = 'steps'; a.pageIdx = {};
     a.captureSeqSoon();
   },
   steps: [
+    // 0 warm up: music first
+    ...CHORDS.map(warm),
     // 1 get ready
     { section: S1, text: 'Press SEQ to open the sequencer', target: T.btn('SEQ'), requires: [R.noArp],
-      why: 'The sequencer remembers what you play, so you can build a beat one part at a time.',
+      why: 'Now let’s make the synth remember those chords. The sequencer records what you play, so you can build a beat one part at a time.',
       done: (a) => a.seqOn && a.mode === 'SEQ' },
     { section: S1, text: 'Turn SELECT to page 2', target: T.knob('SELECT'), requires: [R.seq],
       why: 'SELECT flips between pages. The four boxes on the screen match KNOB1 to KNOB4.',
-      done: (a) => (a.pageIdx.SEQ || 0) === 1, hint: 'turn right ↻', quick: true },
+      done: (a) => (a.pageIdx.SEQ || 0) === 1, hint: 'turn right ↻', quick: true, kind: 'select', doIt: (a) => { a.pageIdx.SEQ = 1; } },
     { section: S1, text: 'Turn KNOB4 to slow the tempo down to about 75', target: T.knob('KNOB4'), requires: seqPage(1),
       why: 'Lofi is slow and relaxed. Turn faster to move in bigger jumps.',
       done: (a) => Math.abs(a.s.global.tempo - 75) <= 3, now: (a) => `Tempo ${a.s.global.tempo}`, goal: 'Tempo 72 to 78',
