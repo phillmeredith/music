@@ -1,9 +1,9 @@
 // Offline cache. Bump VERSION whenever any cached file changes.
-const VERSION = 'sixop-2';
+const VERSION = 'sixop-5';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'engine.wasm', 'worklet.js',
   'js/main.js', 'js/app.js', 'js/audio.js', 'js/dx7.js', 'js/feedback.js', 'js/midi.js', 'js/panel.js',
-  'js/params.js', 'js/presets.js', 'js/screen.js', 'js/store.js',
+  'js/params.js', 'js/presets.js', 'js/screen.js', 'js/store.js', 'js/guide.js', 'js/guide-kit.js', 'js/lessons.js', 'js/song.js', 'js/songs-builtin.js', 'js/transcribe.js', 'js/listen.js',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 
@@ -20,5 +20,10 @@ self.addEventListener('activate', (e) => {
 // cache first, so the instrument starts instantly and works with no network
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request)));
+  const url = new URL(e.request.url);
+  // same-origin files not in the install list (the note-detection model) are kept after first use
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request).then((res) => {
+    if (res.ok && url.origin === location.origin) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
+    return res;
+  })));
 });
