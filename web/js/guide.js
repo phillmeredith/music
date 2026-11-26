@@ -346,6 +346,7 @@ export class Guide {
     this.renderCard(true);
   }
   step() { return this.lesson && this.lesson.steps[this.i]; }
+  quietKeys() { const st = this.step(); return !!this.songLesson || !!(st && st.demo); }
   stopAll() { if (this.allStop) { this.allStop(); this.allStop = null; this.lastKey = ''; } }
 
   // play the step's keys with a white glow, then hand over with a green one
