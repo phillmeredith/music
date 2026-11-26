@@ -145,3 +145,8 @@ cd /tmp/ghp && git add -A && git commit -m "Publish" && git push
 ```
 
 Bump `VERSION` in `web/sw.js` first so installed copies update.
+
+The Worker's source is `worker/worker.js`. It also serves the shared song
+library at `/api/songs` (KV namespace `music-songs`, bound as `SONGS`). Only
+devices that have entered the family code (Worker secret `PAIR_CODE`) can read
+or add songs; changing the secret signs every device out.

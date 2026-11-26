@@ -4,7 +4,7 @@
 // Steps check what the synth is doing, not which button was pressed, so any
 // route to the right result counts, and a wrong turn shows how to get back.
 import { LESSONS } from './lessons.js';
-import { SongLesson, makeSong, events, parseMidi, sequencerToSong, loadSongs, saveSong, deleteSong } from './song.js';
+import { SongLesson, makeSong, events, parseMidi, sequencerToSong, loadSongs, saveSong, deleteSong, syncSongs, unlockLibrary, libraryState } from './song.js';
 import { BUILTIN_SONGS } from './songs-builtin.js';
 import { decodeFile, transcribe } from './transcribe.js';
 import { youtubeId, makePlayer, canShareTab, Recorder } from './listen.js';
@@ -18,6 +18,7 @@ const el = (tag, cls, parent, html) => {
   return e;
 };
 const SVGNS = 'http://www.w3.org/2000/svg';
+const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Guide {
   constructor(app) {
@@ -53,7 +54,8 @@ export class Guide {
   }
 
   // ------------------------------------------------------------ lifecycle
-  menu() {
+  menu(sync = true) {
+    if (sync) syncSongs().then((changed) => { if (this.onMenu() && (changed || libraryState !== this.shownState)) this.menu(false); });
     this.endSong();
     this.lesson = null;
     this.layer.hidden = false; this.layer.classList.add('modal');
@@ -65,15 +67,20 @@ export class Guide {
       </button>`).join('');
     const songItems = songs.map((x, n) => `
       <div class="g-songrow"><button class="g-lesson g-song" data-n="${n}">
-        <b>${x.title}</b><span>${x.blurb || (x.source ? 'From ' + x.source : 'Your song')}</span>
-      </button>${x.builtin ? '' : `<button class="g-del" data-n="${n}" aria-label="Delete ${x.title}">🗑</button>`}</div>`).join('');
+        <b>${esc(x.title)}</b><span>${esc(x.blurb || (x.source ? 'From ' + x.source : 'Your song'))}${x.pending ? ' · not shared yet' : ''}</span>
+      </button>${x.builtin ? '' : `<button class="g-del" data-n="${n}" aria-label="Delete ${esc(x.title)}">🗑</button>`}</div>`).join('');
+    this.shownState = libraryState;
+    const lib = libraryState === 'locked'
+      ? `<div class="g-lock"><b>Shared songs</b><span>Enter the family code once on this device to see everyone's songs.</span>
+          <div class="g-row"><input class="g-code" placeholder="code" autocomplete="off" autocapitalize="off"><button class="g-go g-unlock">Unlock</button></div></div>`
+      : libraryState === 'offline' ? '<p class="g-why">Offline: showing the songs saved on this iPad.</p>' : '';
     this.card.className = 'guide-card centre';
     this.card.innerHTML = `
       <div class="g-head"><span class="g-sec">Lessons</span><button class="g-x" aria-label="Close">✕</button></div>
       <h2>Learn by making something</h2>
       <p class="g-why">A glow shows what to touch, and it moves on by itself when you get it right.</p>
       <h4>Make a beat</h4>${lessons}
-      <h4>Learn a song</h4>${songItems}
+      <h4>Learn a song</h4>${lib}${songItems}
       <h4>Add a song</h4>
       <div class="g-add">
         <button data-a="audio">🎵<b>Music file</b><small>MP3, M4A, WAV</small></button>
@@ -84,9 +91,25 @@ export class Guide {
     this.card.querySelector('.g-x').onclick = () => this.stop();
     this.card.querySelectorAll('.g-lesson:not(.g-song)').forEach((b) => { b.onclick = () => this.intro(LESSONS[+b.dataset.n]); });
     this.card.querySelectorAll('.g-song').forEach((b) => { b.onclick = () => this.startSong(songs[+b.dataset.n]); });
-    this.card.querySelectorAll('.g-del').forEach((b) => { b.onclick = () => { deleteSong(songs[+b.dataset.n].title); this.menu(); }; });
+    this.card.querySelectorAll('.g-del').forEach((b) => {
+      b.onclick = async () => {
+        const song = songs[+b.dataset.n];
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Sure?'; b.classList.add('sure'); return; }
+        b.disabled = true;
+        if (!(await deleteSong(song))) { b.textContent = '!'; return; }
+        this.menu();
+      };
+    });
+    const ub = this.card.querySelector('.g-unlock');
+    if (ub) ub.onclick = async () => {
+      const inp = this.card.querySelector('.g-code'); ub.disabled = true;
+      if (await unlockLibrary(inp.value)) this.menu();
+      else { ub.disabled = false; inp.value = ''; inp.placeholder = 'not right, try again'; }
+    };
     this.card.querySelectorAll('.g-add button').forEach((b) => { b.onclick = () => this.add(b.dataset.a); });
   }
+
+  onMenu() { return !this.layer.hidden && !this.lesson && !this.songLesson && !!this.card.querySelector('.g-add'); }
 
   // ------------------------------------------------------------ songs
   async ensurePower() { if (!this.app.powered) await this.app.powerOn(); }
@@ -212,6 +235,7 @@ export class Guide {
       this.app.engine.panic(); clearTimeout(this.prevT);
       const keep = { title: (name.value || song.title).trim() || 'My song', bpm: song.bpm, notes: song.notes, source: song.source };
       saveSong(keep);
+      syncSongs();
       this.startSong(keep);
     };
   }
