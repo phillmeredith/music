@@ -1,0 +1,208 @@
+/* Panel styled after the FM-1 front panel: cream case, black knurled knobs,
+   brown silicone pads with backlit legends, light-blue LCD. Everything sits on
+   a fixed 1200 x 700 stage that panel.js scales to fit the window. */
+
+@property --ring { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+:root {
+  --case: #f3efe7;
+  --case-edge: #e2ddd2;
+  --print: #4a4a4a;            /* silkscreen legends */
+  --tray: #8e5531;             /* recessed rubber tray */
+  --tray-edge: #6f3f22;
+  --pad: #b0703f;              /* silicone pads */
+  --pad-hi: #c68655;
+  --pad-lo: #8a5430;
+  --pad-ink: #f7eee4;
+  --slot: #4b3b31;             /* light slot in each key */
+  --led: #ffd9a8;              /* warm white backlight */
+  --led-glow: rgba(255, 196, 120, .75);
+  --knob: #1d1d1f;
+  --bezel: #121213;
+  --page: #8b8780;
+  --page-grad: radial-gradient(120% 90% at 50% 0%, #b3afa7 0%, #7d7972 100%);
+}
+:root[data-theme="dark"] {
+  --case: #2b2a28;
+  --case-edge: #1d1c1b;
+  --print: #b9b4aa;
+  --page: #0e0e0f;
+  --page-grad: radial-gradient(120% 90% at 50% 0%, #26262a 0%, #0b0b0d 100%);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--page); background-image: var(--page-grad);
+  font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+#app { position: fixed; inset: 0; }
+:focus { outline: none; }
+:focus-visible { outline: 3px solid #e0893f; outline-offset: 3px; }
+
+/* ------------------------------------------------------------------ case */
+.stage {
+  position: absolute; left: 0; top: 0; width: 1200px; height: 700px;
+  transform-origin: 0 0;
+  border-radius: 48px;
+  background: radial-gradient(140% 120% at 50% 0%, #fbf9f4 0%, var(--case) 55%, var(--case-edge) 100%);
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.7) inset,
+    0 -3px 0 rgba(0,0,0,.08) inset,
+    0 28px 50px rgba(0,0,0,.3),
+    0 4px 10px rgba(0,0,0,.2);
+}
+:root[data-theme="dark"] .stage { background: radial-gradient(140% 120% at 50% 0%, #3a3936 0%, var(--case) 55%, var(--case-edge) 100%); box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 28px 50px rgba(0,0,0,.5); }
+
+/* ------------------------------------------------------------------ knobs */
+.knob-slot { position: absolute; width: 0; height: 0; }
+.enc-wrap {
+  position: absolute; left: -60px; top: -66px; width: 120px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.enc-lbl {
+  height: 20px; line-height: 20px;
+  color: var(--print); font-family: "Courier New", ui-monospace, monospace;
+  font-size: 15.5px; font-weight: 400; letter-spacing: .06em;
+}
+.enc, .pot { position: relative; width: 64px; height: 64px; border-radius: 50%; touch-action: none; }
+.enc { cursor: grab; }
+.enc.touched { cursor: grabbing; }
+/* knurled skirt with a smooth dark cap, like the hardware encoders */
+.enc-grip {
+  position: absolute; inset: 0; border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 42%, #3a3a3d 0 30%, #19191b 52%, transparent 53%),
+    var(--knob);
+  box-shadow:
+    0 6px 10px rgba(0,0,0,.35), 0 2px 3px rgba(0,0,0,.4),
+    0 0 0 2px rgba(0,0,0,.25);
+}
+.enc-grip::before { /* ridges; they turn with the knob */
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-conic-gradient(from var(--a, 0deg), #5a5a5e 0deg 4deg, #0d0d0e 4deg 10deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 66%, #000 67% 100%);
+          mask: radial-gradient(circle, transparent 0 66%, #000 67% 100%);
+}
+.enc-grip::after { /* sheen on the cap */
+  content: ''; position: absolute; inset: 22%; border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, rgba(255,255,255,.22), transparent 60%);
+}
+.enc.touched .enc-grip { transform: translateY(1px); box-shadow: 0 4px 7px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.4), 0 0 0 2px rgba(0,0,0,.25); }
+.enc-ind { display: none; } /* endless encoders carry no marker */
+
+/* MASTER: same knob with a white pointer dot */
+.pot-knob { position: absolute; inset: 0; cursor: ns-resize; }
+.pot-ind { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--a, 150deg)); }
+.pot-ind::before { content: ''; position: absolute; left: -3.5px; top: -20px; width: 7px; height: 9px; border-radius: 2px; background: #f4f1ea; box-shadow: 0 0 2px rgba(0,0,0,.6); }
+
+/* ------------------------------------------------------------------ screen */
+.bezel {
+  position: absolute; left: 312px; top: 56px; width: 283px; height: 278px;
+  background: var(--bezel); border-radius: 40px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 3px 8px rgba(0,0,0,.25);
+}
+.bezel .screen {
+  position: absolute; left: 31px; top: 29px; width: 221px; height: 221px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #000, 0 0 10px rgba(0,0,0,.35) inset;
+}
+
+/* ------------------------------------------------------------------ trays */
+.tray {
+  position: absolute; border-radius: 24px;
+  background: linear-gradient(180deg, var(--tray-edge) 0%, var(--tray) 8%, var(--tray) 100%);
+  box-shadow: 0 2px 4px rgba(0,0,0,.35) inset, 0 1px 0 rgba(255,255,255,.6);
+}
+.oct-tray { left: 73px; top: 302px; width: 187px; height: 59px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; }
+.oct-tray .btn { width: 72px; height: 40px; }
+.btn-tray { left: 641px; top: 196px; width: 478px; height: 163px; }
+.btn-grid {
+  position: absolute; left: 22px; top: 15px; right: 22px; bottom: 16px;
+  display: grid; grid-template-columns: repeat(6, 62px); grid-template-rows: repeat(2, 58px);
+  justify-content: space-between; align-content: space-between;
+}
+.pdot { position: absolute; left: 237px; top: 79px; width: 7px; height: 7px; border-radius: 50%; background: #2a1b12; }
+
+/* ------------------------------------------------------------------ buttons */
+.btn { position: relative; border-radius: 13px; cursor: pointer; touch-action: none; }
+.cap {
+  position: absolute; inset: 0 0 4px 0; border-radius: 13px; overflow: hidden;
+  background: radial-gradient(120% 100% at 50% 20%, var(--pad-hi) 0%, var(--pad) 55%, var(--pad-lo) 100%);
+  box-shadow: 0 4px 0 var(--pad-lo), 0 6px 7px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.25) inset;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 70ms cubic-bezier(.3,.7,.4,1), box-shadow 70ms;
+}
+.oct-tray .cap { border-radius: 10px; }
+/* backlight: brightness follows the LED state */
+.btn .led {
+  position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  background: radial-gradient(60% 45% at 50% 50%, rgba(255,214,160,.55), transparent 75%);
+}
+.btn .lbl {
+  position: relative; color: var(--pad-ink); font-size: 13px; font-weight: 800; letter-spacing: .06em;
+  text-align: center; line-height: 1.15; text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  transition: color 60ms, text-shadow 60ms;
+}
+.btn .lbl hr { margin: 2px 0; border: 0; border-top: 1.5px solid currentColor; }
+.btn.lit .lbl { color: #fff7e8; text-shadow: 0 0 6px var(--led-glow), 0 0 12px var(--led-glow); }
+
+.btn.down .cap { transform: translateY(4px); box-shadow: 0 0 0 var(--pad-lo), 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.15) inset; transition-duration: 25ms; }
+.btn.latched:not(.down) .cap { transform: translateY(2px); box-shadow: 0 2px 0 var(--pad-lo), 0 3px 4px rgba(0,0,0,.3), 0 1px 0 rgba(255,255,255,.2) inset; }
+.btn.release .cap { transition-duration: 110ms; }
+.btn.disabled .lbl { opacity: .45; }
+
+/* long-press ring: starts at RING_MS, completes at LONG_MS (280 ms later) */
+.ring {
+  position: absolute; inset: -4px; border-radius: 16px; pointer-events: none; opacity: 0;
+  background: conic-gradient(#ffd8a6 calc(var(--ring) * 1turn), transparent 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  padding: 2.5px;
+  transition: opacity 80ms;
+}
+.btn.holding .ring { opacity: 1; --ring: 1; transition: --ring 280ms linear, opacity 80ms; }
+.btn.held .ring { opacity: 1; --ring: 1; animation: ring-done 300ms ease-out forwards; }
+@keyframes ring-done { 0% { filter: brightness(1.6); } 100% { opacity: 0; } }
+
+/* ------------------------------------------------------------------ keys */
+.keys { left: 47px; top: 403px; width: 1109px; height: 254px; border-radius: 36px; }
+.key {
+  position: absolute; width: 59px; border-radius: 30px; cursor: pointer; touch-action: none;
+  background: radial-gradient(130% 80% at 50% 15%, var(--pad-hi) 0%, var(--pad) 50%, var(--pad-lo) 100%);
+  box-shadow: 0 5px 0 var(--pad-lo), 0 7px 8px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.25) inset, 0 -2px 4px rgba(0,0,0,.15) inset;
+  transition: transform 60ms cubic-bezier(.3,.7,.4,1), box-shadow 60ms;
+}
+.k-black { top: 20px; height: 104px; }
+.k-white { top: 127px; height: 111px; }
+.kslot {
+  position: absolute; left: 50%; width: 7px; margin-left: -3.5px; border-radius: 4px;
+  background: var(--slot); box-shadow: 0 1px 1px rgba(0,0,0,.5) inset, 0 1px 0 rgba(255,255,255,.18); overflow: hidden;
+}
+.k-black .kslot { top: 21px; height: 36px; }
+.k-white .kslot { top: 25px; height: 58px; }
+.k-black[data-edit="10"] .kslot { top: 22px; height: 58px; } /* unlabelled last key */
+.kled {
+  position: absolute; inset: 0; opacity: 0;
+  background: linear-gradient(180deg, #fff3df, var(--led));
+  box-shadow: 0 0 6px 2px var(--led-glow);
+}
+.klbl {
+  position: absolute; left: 0; right: 0; bottom: 30px; text-align: center;
+  color: #4a2f1e; font-size: 12px; font-weight: 500; letter-spacing: .02em;
+}
+.key.lit .kslot { box-shadow: 0 0 8px 2px var(--led-glow); }
+.key.down { transform: translateY(5px); transition-duration: 20ms;
+  box-shadow: 0 0 0 var(--pad-lo), 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.2) inset, 0 -2px 4px rgba(0,0,0,.15) inset; }
+.key.release { transition-duration: 100ms; }
+.kdot { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #2a1b12; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cap, .key { transition: none !important; }
+}
