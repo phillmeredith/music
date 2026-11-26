@@ -40,7 +40,7 @@ export class Guide {
     const peek = (on) => (e) => { e.preventDefault(); e.stopPropagation(); this.card.classList.toggle('peeking', on); };
     this.peek.addEventListener('pointerdown', peek(true));
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => this.peek.addEventListener(t, peek(false)));
-    this.launcher = el('button', 'guide-launch', document.body, '<span>?</span><b>Learn</b>');
+    this.launcher = el('button', 'guide-launch', document.body, '<b>Learn</b>');
     this.launcher.setAttribute('aria-label', 'Open lessons');
     this.launcher.addEventListener('click', () => (this.lesson || this.songLesson ? this.stop() : this.menu()));
     // the same Learn button, drawn on the device screen before power-on (app.draw paints it)
@@ -157,20 +157,25 @@ export class Guide {
   niceTitle(name) { return String(name || 'My song').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').slice(0, 40); }
 
   async add(kind) {
-    await this.ensurePower();
+    const power = this.ensurePower(); // start sound inside this tap, then open the picker in the same tap
     try {
       if (kind === 'audio') {
-        const f = await this.pickFile('audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac'); if (!f) return;
+        const pick = this.pickFile('audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac');
+        await power;
+        const f = await pick; if (!f) return;
         this.working('Music file', 'Reading the file…');
         const buf = await decodeFile(this.app.engine.ctx, f);
         return this.fromAudio(buf, this.niceTitle(f.name), 'a music file');
       }
       if (kind === 'midi') {
-        const f = await this.pickFile('.mid,.midi,audio/midi,audio/x-midi'); if (!f) return;
+        const pick = this.pickFile('.mid,.midi,audio/midi,audio/x-midi');
+        await power;
+        const f = await pick; if (!f) return;
         const m = parseMidi(await f.arrayBuffer());
         if (!m.tracks.length) throw new Error('No notes found in that MIDI file.');
         return this.pickTrack(m, this.niceTitle(f.name));
       }
+      await power;
       if (kind === 'seq') {
         await this.app.refreshSeqVals();
         const song = sequencerToSong(this.app, 'My beat ' + new Date().toLocaleDateString());
@@ -240,7 +245,7 @@ export class Guide {
     };
   }
   preview(song) {
-    const a = this.app; a.engine.panic();
+    const a = this.app; a.readyToPlay(); a.engine.panic();
     (this.prevTimers || []).forEach(clearTimeout); this.prevTimers = [];
     const first = song.notes.filter((x) => x.t < 15);
     for (const x of first) {

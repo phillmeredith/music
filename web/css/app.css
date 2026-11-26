@@ -216,7 +216,7 @@ html, body {
 /* ------------------------------------------------------------------ guide */
 .guide-launch {
   position: fixed; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); z-index: 30;
-  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 6px; border: 0; border-radius: 17px;
+  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 0; border-radius: 17px;
   background: rgba(40,28,20,.78); color: #fff4e6; font: 700 13px/1 "Helvetica Neue", Arial, sans-serif; cursor: pointer;
   box-shadow: 0 4px 12px rgba(0,0,0,.25); touch-action: manipulation;
 }

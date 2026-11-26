@@ -270,6 +270,7 @@ export class SongLesson {
     if (a.seqOn) a.toggleSeq();
     a.setMode('HOME');
     a.s.ui.octave = this.oct; a.s.ui.transpose = 0;
+    a.readyToPlay();
     a.engine.panic();
     this.listen();
   }

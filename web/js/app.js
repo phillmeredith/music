@@ -67,6 +67,17 @@ export class App {
     requestAnimationFrame(loop);
   }
 
+  // a lesson or preview is about to play notes on the current voice: make sure
+  // nothing (arp, sequencer, a switched-off voice, a suspended context) eats them
+  readyToPlay() {
+    const c = this.engine.ctx; if (c && c.state !== 'running') c.resume().catch(() => {});
+    if (this.s.arp.on) this.toggleArp();
+    if (this.seqVals[P.P_SEQ_PLAY]) this.setSeqPlay(0);
+    if (this.seqOn) this.toggleSeq();
+    const pt = this.part();
+    if (!pt.on) { pt.on = 1; this.store.partParam(this.cur, P.PP_ON, 1); }
+  }
+
   // ---------------------------------------------------------------- power
   async powerOn() {
     if (this.powered) return;
@@ -925,7 +936,9 @@ export class App {
       sc.text('SIXOP', 120, 92, 30, t.accent, 'center', 900);
       sc.text('six-operator FM', 120, 116, 11, t.dim, 'center', 600);
       sc.rrect(60, 140, 120, 34, 17, t.widgetOn);
-      sc.text('?  Learn', 120, 163, 15, t.textOn, 'center', 800);
+      sc.g.textBaseline = 'middle';
+      sc.text('Learn', 120, 158, 15, t.textOn, 'center', 800);
+      sc.g.textBaseline = 'alphabetic';
       sc.text('or tap any key to power on', 120, 204, 10, t.dim, 'center');
       return;
     }
