@@ -919,7 +919,16 @@ export class App {
   draw() {
     const sc = this.screen;
     if (!sc) return; // panel can ask for a redraw before the screen exists
-    if (!this.powered) { sc.boot(0); sc.text('Tap any key to power on', 120, 190, 10, sc.theme.dim, 'center'); return; }
+    if (this.guide) this.guide.screenBtn.hidden = this.powered;
+    if (!this.powered) {
+      const t = sc.theme; sc.begin();
+      sc.text('SIXOP', 120, 92, 30, t.accent, 'center', 900);
+      sc.text('six-operator FM', 120, 116, 11, t.dim, 'center', 600);
+      sc.rrect(60, 140, 120, 34, 17, t.widgetOn);
+      sc.text('?  Learn', 120, 163, 15, t.textOn, 'center', 800);
+      sc.text('or tap any key to power on', 120, 204, 10, t.dim, 'center');
+      return;
+    }
     sc.begin();
     const pt = this.part(), now = performance.now();
     const icons = [];
