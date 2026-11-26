@@ -502,21 +502,35 @@ export class Guide {
     const rd = this.card.querySelector('.g-redo'); if (rd) rd.onclick = () => { st.redo(app); this.lastKey = ''; };
   }
 
-  // an arc of light round a knob: it points the way to turn, and gets
-  // shorter the closer the value is to the goal
-  arc(hint, size) {
-    const right = String(hint).includes('↻'), d = hint.d;
-    const span = d == null ? 110 : 30 + 220 * Math.min(Math.abs(d), 12) / 12;
-    const R = size / 2 + 9, c = R + 6, a0 = -90, a1 = a0 + (right ? span : -span);
-    const pt = (a) => [c + R * Math.cos(a * Math.PI / 180), c + R * Math.sin(a * Math.PI / 180)];
-    const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
-    const tip = pt(a1 + (right ? 9 : -9)), back = (a) => [c + (R + 7 * a) * Math.cos(a1 * Math.PI / 180), c + (R + 7 * a) * Math.sin(a1 * Math.PI / 180)];
-    const [bx0, by0] = back(1), [bx1, by1] = back(-1);
+  // an arc of light round a knob. A faint track shows the whole turn from
+  // where he started; it fills up as the value gets closer to the goal, and
+  // turns red the further he turns the wrong way. The arrowhead shows the way.
+  arc(hint, size, key) {
+    const right = String(hint).includes('↻'), d = hint.d, SPAN = 250;
+    let prog = 0, bad = 0;
+    if (d != null) {
+      if (this.arcKey !== key) { this.arcKey = key; this.arcD0 = Math.max(1, Math.abs(d)); }
+      const d0 = this.arcD0, ad = Math.abs(d);
+      prog = Math.max(0, Math.min(1, 1 - ad / d0));
+      bad = Math.max(0, Math.min(1, (ad - d0) / Math.max(2, d0 * 0.5)));
+    }
+    const R = size / 2 + 9, c = R + 8, a0 = -90, sg = right ? 1 : -1;
+    const pt = (a, r = R) => [c + r * Math.cos(a * Math.PI / 180), c + r * Math.sin(a * Math.PI / 180)];
+    const path = (from, sweep) => {
+      const [x0, y0] = pt(from), [x1, y1] = pt(from + sg * sweep);
+      return `M${x0} ${y0} A${R} ${R} 0 ${sweep > 180 ? 1 : 0} ${right ? 1 : 0} ${x1} ${y1}`;
+    };
+    const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+    // orange to start, easing to green as it nears the goal, red past the start the wrong way
+    const col = `rgb(${(bad > 0 ? mix([255, 181, 98], [255, 60, 50], bad) : mix([255, 181, 98], [95, 224, 122], prog * prog)).join(',')})`;
+    const end = a0 + sg * SPAN, tip = pt(end + sg * 10), b0 = pt(end, R + 8), b1 = pt(end, R - 8);
     const svg = document.createElementNS(SVGNS, 'svg');
     svg.setAttribute('class', 'g-arc'); svg.setAttribute('width', 2 * c); svg.setAttribute('height', 2 * c);
     svg.style.left = (size / 2 - c) + 'px'; svg.style.top = (size / 2 - c) + 'px';
-    svg.innerHTML = `<path d="M${x0} ${y0} A${R} ${R} 0 ${span > 180 ? 1 : 0} ${right ? 1 : 0} ${x1} ${y1}" fill="none" stroke="#ffb562" stroke-width="5" stroke-linecap="round"/>
-      <path d="M${bx0} ${by0} L${tip[0]} ${tip[1]} L${bx1} ${by1} Z" fill="#ffb562"/>`;
+    svg.style.filter = `drop-shadow(0 0 6px ${col})`;
+    svg.innerHTML = `<path d="${path(a0, SPAN)}" fill="none" stroke="${col}" stroke-opacity="${0.28 + bad * 0.5}" stroke-width="5" stroke-linecap="round"/>
+      ${prog > 0.01 ? `<path d="${path(a0, SPAN * prog)}" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round"/>` : ''}
+      <path d="M${b0[0]} ${b0[1]} L${tip[0]} ${tip[1]} L${b1[0]} ${b1[1]} Z" fill="${col}"/>`;
     return svg;
   }
 
@@ -547,7 +561,7 @@ export class Guide {
         g.style.width = r.width + pad * 2 + 'px'; g.style.height = r.height + pad * 2 + 'px';
         g.style.borderRadius = Math.min(r.width, r.height) / 2 + pad + 'px';
         if (hint && n === 0) el('span', 'g-hint', g, String(hint));
-        if (hint && n === 0 && !ok && targets[0].matches('.enc, .pot-knob')) g.appendChild(this.arc(hint, r.width + pad * 2));
+        if (hint && n === 0 && !ok && targets[0].matches('.enc, .pot-knob')) g.appendChild(this.arc(hint, r.width + pad * 2, this.i + '|' + (this.activeReq ? this.activeReq.text : '')));
       });
     }
   }
