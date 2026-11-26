@@ -174,7 +174,7 @@ const lofi = {
   intro: 'You’ll build a slow, chilled beat one layer at a time: four jazzy chords, a bass line, kick, snare and hi-hats. Then you’ll stack them into a song and make it sound warm and dusty. Each step glows; just do what the box says.',
   async setup(a) {
     if (!a.powered) await a.powerOn();
-    if (a.s.arp.on) a.toggleArp();
+    a.arpOff();
     a.engine.panic();
     a.engine.seqCmd(9, 0, 0);                      // blank sequencer
     a.s.ui.octave = 0; a.s.ui.transpose = 0;

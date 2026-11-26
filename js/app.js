@@ -71,9 +71,9 @@ export class App {
   // nothing (arp, sequencer, a switched-off voice, a suspended context) eats them
   readyToPlay() {
     const c = this.engine.ctx; if (c && c.state !== 'running') c.resume().catch(() => {});
-    if (this.s.arp.on) this.toggleArp();
+    this.arpOff();
     if (this.seqVals[P.P_SEQ_PLAY]) this.setSeqPlay(0);
-    if (this.seqOn) this.toggleSeq();
+    this.seqOff();
     const pt = this.part();
     if (!pt.on) { pt.on = 1; this.store.partParam(this.cur, P.PP_ON, 1); }
   }
@@ -396,12 +396,25 @@ export class App {
   }
 
   // ARP and SEQ are mutually exclusive
+  arpOff() {
+    const a = this.s.arp; if (!a.on) return;
+    a.on = 0; this.engine.set(P.P_ARP_ON, 0); this.fb.disengage();
+    if (this.mode === 'ARP') this.setMode('HOME');
+  }
   toggleArp() {
     const a = this.s.arp;
     if (this.seqOn) return this.blocked('Disable SEQ to enter');
     if (!a.on) { a.on = 1; this.engine.set(P.P_ARP_ON, 1); this.fb.engage(); this.setMode('ARP'); }
     else if (this.mode === 'ARP') { a.on = 0; this.engine.set(P.P_ARP_ON, 0); this.fb.disengage(); this.setMode('HOME'); }
     else this.setMode('ARP');
+  }
+  // leave the sequencer whatever page is showing (toggleSeq only leaves from the SEQ page)
+  seqOff() {
+    if (!this.seqOn) return;
+    this.seqOn = 0; this.engine.set(P.P_SEQ_ON, 0); this.fb.disengage();
+    this.seqVals[P.P_SEQ_PLAY] = 0; this.seqVals[P.P_SEQ_REC] = 0;
+    if (this.mode === 'SEQ') this.setMode('HOME');
+    this.captureSeqSoon();
   }
   toggleSeq() {
     if (this.s.arp.on) return this.blocked('Disable ARP to enter');
