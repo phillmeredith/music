@@ -276,7 +276,7 @@ html, body {
 .g-back, .g-skip { background: #a2b2c6; color: #151a21; }
 .g-back[disabled] { opacity: .4; }
 .g-redo { background: #e6c9a3; color: #5a2c08; }
-.g-go { background: #4d6079; color: #f4f7fb; }
+.g-go, .g-row button.g-go { background: #4d6079; color: #f4f7fb; }
 .g-lesson { display: block; width: 100%; text-align: left; margin: 4px 0 0; padding: 6px 8px; border: 0; border-radius: 6px; background: #a2b2c6; cursor: pointer; font: inherit; color: inherit; }
 .g-lesson b { display: block; font-size: 12.5px; }
 .g-lesson span { display: block; font-size: 10px; color: #2c3745; margin: 1px 0; }
@@ -313,3 +313,25 @@ html, body {
 .key.g-play .kled { opacity: 1 !important; }
 .key.g-bad { box-shadow: 0 0 0 4px #ff6a5a, 0 0 18px 6px rgba(255,90,80,.6) !important; animation: g-shake 300ms; }
 @keyframes g-shake { 25% { margin-left: -3px; } 75% { margin-left: 3px; } }
+
+/* --- tutorial: progress map, help escalation, celebrations --- */
+.g-map { display: inline-flex; gap: 3px; align-items: center; margin-left: auto; }
+.g-map i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid #4f5d6e; background: transparent; }
+.g-map i.done { background: #4f5d6e; }
+.g-map i.now { background: #ffb562; border-color: #9c5a0c; transform: scale(1.25); }
+.guide-layer.g-urge .g-ring { border-width: 4px; animation-duration: .8s;
+  box-shadow: 0 0 0 7px rgba(255,181,98,.4), 0 0 40px 14px rgba(255,170,80,.75); }
+.guide-layer.g-urge .g-ring.ok, .guide-layer.g-urge .g-ring.demo { animation-duration: 1.3s; }
+.key.g-next { transition: box-shadow .2s; }
+body:has(.guide-layer.g-urge) .key.g-next { box-shadow: 0 0 0 6px #ffb562, 0 0 40px 14px rgba(255,170,80,.9) !important; }
+.g-twist { animation: g-twist 1.2s ease-in-out infinite; }
+@keyframes g-twist { 0%, 100% { rotate: 0deg; } 30% { rotate: 28deg; } 60% { rotate: -10deg; } }
+.g-dofor { background: #ffb562 !important; color: #3a2408 !important; }
+.g-party { position: fixed; pointer-events: none; overflow: visible; z-index: 30; }
+.g-party span { position: absolute; bottom: 10%; font-size: 20px; opacity: 0; animation: g-float 1.6s ease-out forwards; }
+@keyframes g-float {
+  0% { transform: translate(0, 0) scale(.5); opacity: 0; }
+  15% { opacity: 1; transform: translate(calc(var(--dx) * .2), -20px) scale(1.1); }
+  100% { transform: translate(var(--dx), -140px) scale(1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .g-twist, .g-party span { animation: none; } }

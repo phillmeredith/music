@@ -308,27 +308,52 @@ export class Guide {
   }
 
   intro(lesson) {
+    const saved = this.savedProgress(lesson);
     const busy = this.app.seqDump && this.app.seqDump.some((v, i) => i < 16 * 1032 && v !== 0 && (i % 16) < 4);
     this.card.className = 'guide-card centre';
     this.card.innerHTML = `
       <div class="g-head"><span class="g-sec">${lesson.title}</span><button class="g-x" aria-label="Close">✕</button></div>
       <h2>${lesson.title}</h2>
       <p>${lesson.intro}</p>
-      ${busy ? '<p class="g-warn">This starts the sequencer from blank, so patterns already in it will be cleared.</p>' : ''}
-      <div class="g-row"><button class="g-go">Start</button></div>`;
+      ${saved ? `<p class="g-why">You got as far as <b>${esc(saved.section)}</b>.</p>` : busy ? '<p class="g-warn">This starts the sequencer from blank, so patterns already in it will be cleared.</p>' : ''}
+      <div class="g-row">${saved ? '<button class="g-restart">Start again</button><button class="g-go">Carry on</button>' : '<button class="g-go">Start</button>'}</div>`;
     this.card.querySelector('.g-x').onclick = () => this.stop();
-    this.card.querySelector('.g-go').onclick = () => this.begin(lesson);
+    this.card.querySelector('.g-go').onclick = () => (saved ? this.begin(lesson, saved.at) : this.begin(lesson));
+    const rs = this.card.querySelector('.g-restart'); if (rs) rs.onclick = () => this.begin(lesson);
+  }
+  // where he got to last time (start of that part), kept on the device
+  savedProgress(lesson) {
+    try {
+      const p = JSON.parse(localStorage.getItem('sixop.lessonProgress') || 'null');
+      if (!p || p.title !== lesson.title || !(p.i > 0) || p.i >= lesson.steps.length - 1) return null;
+      const sec = lesson.steps[p.i] && lesson.steps[p.i].section;
+      const at = lesson.steps.findIndex((x) => x.section === sec);
+      return at > 0 ? { at, section: sec } : null;
+    } catch { return null; }
+  }
+  saveProgress() {
+    try {
+      if (!this.lesson) return;
+      const st = this.step();
+      if (!st || st.final) localStorage.removeItem('sixop.lessonProgress');
+      else localStorage.setItem('sixop.lessonProgress', JSON.stringify({ title: this.lesson.title, i: this.i }));
+    } catch { /* private mode */ }
   }
 
-  async begin(lesson) {
-    this.lesson = lesson; this.i = 0;
+  async begin(lesson, at = 0) {
+    this.lesson = lesson; this.i = at;
+    // how many times each kind of fiddly step has come up: 1st he watches, 2nd he does it, then it's done for him
+    const seen = {};
+    this.occ = lesson.steps.map((x) => (x.kind ? (seen[x.kind] = (seen[x.kind] || 0) + 1) : 0));
     this.layer.classList.remove('modal');
     this.launcher.classList.add('on');
-    if (lesson.setup) await lesson.setup(this.app);
+    if (lesson.setup && !at) await lesson.setup(this.app);
+    else if (!this.app.powered) await this.app.powerOn();
     this.enter();
   }
 
   stop() {
+    clearInterval(this.moveT); this.moving = false; this.forI = -1;
     this.stopAll();
     this.endSong();
     this.lesson = null;
@@ -343,7 +368,88 @@ export class Guide {
     if (st && st.onEnter) st.onEnter(this.app, this);
     this.stopAll(); this.oops = ''; this.demoing = false; clearTimeout(this.demoT);
     if (st && st.demo) this.startDemo(st);
+    const n = st && st.doIt ? this.occ[this.i] : 0;
+    this.autoMode = n === 1 ? 'watch' : n >= 3 ? 'auto' : null;
+    this.yourTurn = n === 2;
+    this.autoAt = performance.now() + (this.autoMode === 'watch' ? 2200 : 700); this.autoDone = false;
+    this.stepT0 = performance.now(); this.progKey = ''; this.helpLevel = 0;
+    this.layer.classList.remove('g-urge');
+    if (st && st.check) this.celebrate();
+    if (st && st.final) { this.celebrate(true); }
+    this.saveProgress();
     this.renderCard(true);
+  }
+
+  // a burst of confetti over the screen and a happy sound
+  celebrate(big = false) {
+    this.app.fb.saved && this.app.fb.saved();
+    const cv = document.querySelector('.bezel .screen'); if (!cv) return;
+    const r = cv.getBoundingClientRect(), box = el('div', 'g-party', this.layer);
+    box.style.left = r.x + 'px'; box.style.top = r.y + 'px'; box.style.width = r.width + 'px'; box.style.height = r.height + 'px';
+    const bits = ['🎉', '⭐', '🎵', '✨', '🎶', '💫'];
+    for (let k = 0; k < (big ? 26 : 14); k++) {
+      const b = el('span', '', box, bits[k % bits.length]);
+      b.style.left = (Math.random() * 90 + 5) + '%';
+      b.style.animationDelay = Math.random() * 300 + 'ms';
+      b.style.setProperty('--dx', (Math.random() * 80 - 40) + 'px');
+    }
+    setTimeout(() => box.remove(), 2000);
+  }
+
+  // "Do it for me": what the guide can do itself for the current step
+  btnName(t) { const m = typeof t === 'string' && /^\.btn\[data-name="(\w+)"\]$/.exec(t); return m ? m[1] : null; }
+  pressBtn(name) { const a = this.app; a.onButton(name, 'down', {}); setTimeout(() => a.onButton(name, 'up', {}), 120); }
+  doFor(run = true) {
+    const a = this.app, st = this.step(), req = this.activeReq;
+    if (!st || st.final || st.check) return false;
+    const cur = req || st;
+    let act = null;
+    if (req && req.fix) act = () => req.fix(a);
+    else if (!req && st.doIt) act = () => st.doIt(a);
+    else if (!req && st.demo) act = () => { st.demo.keys.forEach((k) => a.onKey(k, 'down', {})); setTimeout(() => st.demo.keys.forEach((k) => a.onKey(k, 'up', {})), 1000); };
+    else { const one = this.oneMove(cur); if (one) act = () => this.repeatMove(cur, one); }
+    if (act && run) {
+      act(); this.stepT0 = performance.now(); this.helpLevel = 0; this.layer.classList.remove('g-urge');
+      // keep going through any "first:" fixes until the whole step is done
+      if (this.forI !== this.i) { this.forI = this.i; this.forUntil = performance.now() + 25000; } this.forNext = performance.now() + 1300;
+    }
+    return !!act;
+  }
+  // one small move toward the goal on the control the step points at
+  oneMove(cur) {
+    const a = this.app, sel = typeof cur.target === 'function' ? cur.target(a) : cur.target;
+    const list = [].concat(sel || []);
+    if (!list.length) return null;
+    const btns = list.map((x) => this.btnName(x));
+    if (btns.every(Boolean)) {
+      const f = () => { btns.forEach((n) => a.onButton(n, 'down', {})); setTimeout(() => btns.slice().reverse().forEach((n) => a.onButton(n, 'up', {})), 90); };
+      f.gap = 550; // let the press land (sequencer state comes back a moment later) before checking again
+      return f;
+    }
+    if (list.length !== 1) return null;
+    const m = /^\.enc\[aria-label="(\w+)"\]/.exec(list[0]);
+    if (m) {
+      const name = m[1] === 'ALGORITHM' ? 'ALGO' : m[1].replace(/^KNOB(\d)$/, 'K$1');
+      return () => {
+        const h = typeof cur.hint === 'function' ? cur.hint(a) : cur.hint;
+        const d = h && typeof h.d === 'number' ? Math.sign(h.d) : /left/.test(String(h || '')) ? -1 : 1;
+        if (d) a.onTurn(name, d, h && typeof h.d === 'number' ? Math.min(4, Math.ceil(Math.abs(h.d) / 8)) : 1);
+      };
+    }
+    const k = /^\.key\[data-idx="(\d+)"\]$/.exec(list[0]);
+    if (k) { const f = () => { a.onKey(+k[1], 'down', {}); setTimeout(() => a.onKey(+k[1], 'up', {}), 110); }; f.gap = 600; return f; }
+    return null;
+  }
+  repeatMove(cur, one) {
+    const a = this.app, i = this.i, isReq = cur !== this.step();
+    let n = 0;
+    clearInterval(this.moveT);
+    this.moving = true;
+    this.moveT = setInterval(() => {
+      const fin = isReq ? cur.ok(a) : cur.done(a);
+      if (fin || this.i !== i || !this.lesson || ++n > 200) { clearInterval(this.moveT); this.moving = false; return; }
+      one();
+    }, one.gap || 140);
   }
   step() { return this.lesson && this.lesson.steps[this.i]; }
   quietKeys() { const st = this.step(); return !!this.songLesson || !!(st && st.demo); }
@@ -412,9 +518,29 @@ export class Guide {
     if (!st) return;
     if (st.final) { this.place(this.targetsFor(st), st); return; }
     // the first unmet requirement takes over the card until it's put right
-    const req = (st.requires || []).find((r) => !r.ok(app));
+    let req = (st.requires || []).find((r) => !r.ok(app));
+    // a "watch me" or "done for you" step fixes its own small requirements (like the page)
+    const unmet = (st.requires || []).filter((r) => !r.ok(app));
+    const selfFix = this.autoMode && !this.autoDone && unmet.every((r) => r.fix);
+    if (selfFix) req = null;
+    if (selfFix && now >= this.autoAt && !st.done(app)) {
+      unmet.forEach((r) => r.fix(app)); st.doIt(app); this.autoDone = true; this.lastKey = ''; this.ringKey = '';
+    }
     const active = req || st;
     const ok = !req && st.done(app);
+    if (this.forI === this.i && !ok && !this.moving && now < this.forUntil && now >= this.forNext) {
+      this.forNext = now + 1300; this.activeReq = req; this.doFor();
+    }
+    // help that steps up while nothing changes: bigger glow at 8 s, a demo at 15 s, "Do it for me" at 30 s
+    const pk = (req ? req.text : '') + '|' + (active.now ? active.now(app) : '') + '|' + app.heldKeys.size;
+    if (pk !== this.progKey) { this.progKey = pk; this.stepT0 = now; }
+    const idle = now - this.stepT0;
+    const lvl = ok || (this.autoMode && !this.autoDone) || st.check ? 0 : idle > 30000 ? 3 : idle > 15000 ? 2 : idle > 8000 ? 1 : 0;
+    if (lvl !== this.helpLevel) {
+      this.helpLevel = lvl; this.lastKey = '';
+      this.layer.classList.toggle('g-urge', lvl >= 1);
+      if (lvl === 2 && !req && st.demo && !this.demoing) this.startDemo(st);
+    }
     this.active = active; this.activeReq = req;
     if (ok && !this.doneAt) {
       this.doneAt = now;
@@ -439,7 +565,7 @@ export class Guide {
     const app = this.app;
     const live = active.now ? active.now(app) : '';
     const wrong = !ok && st.wrong && !req ? st.wrong(app) : '';
-    const key = [this.i, req ? req.text : '', live, wrong, ok, st.check ? app.seqVals[P.P_SEQ_PLAY] : '', this.demoing, this.oops, !!this.allStop].join('|');
+    const key = [this.i, req ? req.text : '', live, wrong, ok, st.check ? app.seqVals[P.P_SEQ_PLAY] : '', this.demoing, this.oops, !!this.allStop, this.autoMode, this.autoDone, this.helpLevel].join('|');
     if (!force && key === this.lastKey) return;
     this.lastKey = key;
     const n = this.lesson.steps.length, pct = Math.round((this.i / (n - 1)) * 100);
@@ -449,19 +575,27 @@ export class Guide {
     const nowLine = live ? `<div class="g-now ${ok ? 'ok' : ''}"><span>Now</span>${live}</div>` : '';
     const redo = st.redo && !req ? '<button class="g-redo">Redo</button>' : '';
     const demo = st.demo && !req;
-    const shown = demo ? (this.demoing ? '👀 Watch and listen…' : 'Now your turn! ' + text.replace(/glowing/g, 'yellow')) : text;
+    const watching = this.autoMode && !this.autoDone && !req && !ok;
+    let shown = demo ? (this.demoing ? '👀 Watch and listen…' : 'Now your turn! ' + text.replace(/glowing/g, 'yellow')) : text;
+    if (watching) shown = this.autoMode === 'watch' ? '👀 Watch me do this one' : '⚡ I’ll do this bit for you';
+    else if (this.yourTurn && !req && !ok) shown = 'Your turn! ' + text;
+    const sections = [...new Set(this.lesson.steps.map((x) => x.section))], si = sections.indexOf(st.section);
+    const map = sections.map((x, k) => `<i class="${k < si ? 'done' : k === si ? 'now' : ''}"></i>`).join('');
+    const dofor = this.helpLevel >= 3 && !ok && this.doFor(false) ? '<button class="g-go g-dofor">Do it for me</button>' : '';
     this.card.className = 'guide-card' + (ok ? ' ok' : '') + (req ? ' fix' : '') + (st.final ? ' centre' : '');
     this.card.innerHTML = `
       <div class="g-head">
         <span class="g-sec">${st.section || ''}</span>
-        <span class="g-count">${this.i + 1} / ${n}</span>
+        <span class="g-map" aria-label="Part ${si + 1} of ${sections.length}">${map}</span>
         <button class="g-x" aria-label="Close lesson">✕</button>
       </div>
       <div class="g-bar"><i style="width:${pct}%"></i></div>
       ${req ? '<div class="g-oops">First:</div>' : ''}
       <h3>${ok ? '✓ ' : ''}${shown}</h3>
+      ${watching ? `<p class="g-why">${text}.${this.autoMode === 'watch' ? ' Next time it’s your turn.' : ''}</p>` : ''}
       ${demo && this.oops && !ok ? `<p class="g-try">${this.oops}</p>` : ''}
-      ${nowLine}${goal}${why}
+      ${nowLine}${goal}${watching ? '' : why}
+      ${dofor ? `<div class="g-row">${dofor}</div>` : ''}
       ${wrong ? `<p class="g-warn">${wrong}</p>` : ''}
       ${st.check ? `<div class="g-row"><button class="g-hearme">${app.seqVals[P.P_SEQ_PLAY] ? 'Stop' : 'Hear this part'}</button>${st.check.pat > 0 ? `<button class="g-hearall">${this.allStop ? 'Stop' : 'Hear it all'}</button>` : ''}</div>
       <div class="g-row"><button class="g-again">Start over</button><button class="g-go g-cont">Continue</button></div>` : `<div class="g-row">
@@ -471,6 +605,7 @@ export class Guide {
       </div>`}`;
     this.card.querySelector('.g-x').onclick = () => this.stop();
     const bk = this.card.querySelector('.g-back'); if (bk) bk.onclick = () => this.go(-1);
+    const df = this.card.querySelector('.g-dofor'); if (df) df.onclick = () => { this.doFor(); this.lastKey = ''; };
     const sm = this.card.querySelector('.g-showme'); if (sm) sm.onclick = () => { this.oops = ''; this.startDemo(st); };
     if (st.check) {
       const pat = st.check.pat;
@@ -543,7 +678,7 @@ export class Guide {
     const vw = window.innerWidth, vh = window.innerHeight;
     const rects = targets.map((t) => t.getBoundingClientRect());
     const hint = st.hint ? (typeof st.hint === 'function' ? st.hint(this.app) : st.hint) : '';
-    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + (hint && hint.d != null ? hint.d : '') + ok + vw + vh + [...this.app.heldKeys.keys()].join(',') + this.demoing + !!this.activeReq;
+    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + (hint && hint.d != null ? hint.d : '') + ok + vw + vh + (this.autoMode && !this.autoDone) + [...this.app.heldKeys.keys()].join(',') + this.demoing + !!this.activeReq;
     if (rk !== this.ringKey) {
       this.ringKey = rk;
       const pad = 8;
@@ -557,8 +692,10 @@ export class Guide {
       this.rings.innerHTML = '';
       rects.forEach((r, n) => {
         const keyStep = st.demo && !this.activeReq;
+        const watchingNow = this.autoMode && !this.autoDone && !this.activeReq && !ok;
         const held = keyStep && !this.demoing && this.app.heldKeys.has(+targets[n].dataset.idx);
-        const g = el('div', 'g-ring' + (ok || held ? ' ok' : keyStep ? (this.demoing ? ' demo' : ' turn') : ''), this.rings);
+        const g = el('div', 'g-ring' + (ok || held ? ' ok' : watchingNow ? ' demo' : keyStep ? (this.demoing ? ' demo' : ' turn') : ''), this.rings);
+        targets[n].classList.toggle('g-twist', !!watchingNow && targets[n].matches('.enc, .pot-knob'));
         g.style.left = r.x - pad + 'px'; g.style.top = r.y - pad + 'px';
         g.style.width = r.width + pad * 2 + 'px'; g.style.height = r.height + pad * 2 + 'px';
         g.style.borderRadius = Math.min(r.width, r.height) / 2 + pad + 'px';
