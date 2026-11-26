@@ -271,9 +271,9 @@ export class SongLesson {
     // (other voices that are switched on would layer on top of every key)
     this.soloed = a.s.parts.map((pt) => pt.on);
     a.s.parts.forEach((pt, i) => { if (i !== a.cur && pt.on) { pt.on = 0; a.store.partParam(i, P.PP_ON, 0); } });
-    if (a.s.arp.on) a.toggleArp();
+    a.arpOff();
     if (a.seqVals[P.P_SEQ_PLAY]) a.setSeqPlay(0);
-    if (a.seqOn) a.toggleSeq();
+    a.seqOff();
     a.setMode('HOME');
     a.s.ui.octave = this.oct; a.s.ui.transpose = 0;
     a.readyToPlay();
