@@ -7,10 +7,10 @@ export const RING_MS = 600;    // hold ring appears, completes at LONG_MS
 const REPEAT_MS = 100;
 
 export const BUTTONS = [
-  ['FX', 'FX'], ['SEL', 'SEL'], ['ENV', 'ENV'], ['LFO', 'LFO'], ['EDIT', 'EDIT'], ['GLO', 'GLOBE'], ['HOME', 'HOME'],
-  ['SAVE', 'SAVE'], ['ARP', 'ARP'], ['SEQ', 'SEQ'], ['PLAY', 'PLAY'], ['REC', 'REC'], ['OCTDN', 'OCT −'], ['OCTUP', 'OCT +'],
+  ['FX', 'FX'], ['SEL', 'SEL'], ['ENV', 'ENV'], ['LFO', 'LFO'], ['EDIT', 'EDIT'], ['GLO', 'GLO'],
+  ['HOME', 'HOME'], ['SAVE', 'SAVE'], ['ARP', 'ARP'], ['SEQ', 'SEQ'], ['PLAY', 'PLAY/STOP'], ['REC', 'REC'],
+  ['OCTDN', 'OCT-'], ['OCTUP', 'OCT+'],
 ];
-const ENCODERS = [['SELECT', 'select'], ['PRESETS', 'presets'], ['ALGO', 'algorithm']];
 export const KEY_COUNT = 27;
 // 27 keys from F: semitone index -> is black
 const BLACK = (i) => [1, 3, 6, 8, 10].includes((i + 5) % 12);
@@ -37,49 +37,54 @@ export class Panel {
     requestAnimationFrame(this.raf);
   }
 
+  // Layout matches the FM-1 front panel. Coordinates are stage pixels on a
+  // 1200 x 700 case (photo scaled 0.694), centres unless noted.
   build(root) {
     const stage = this.stage = el('div', 'stage', root);
     stage.setAttribute('role', 'application');
-    stage.setAttribute('aria-label', 'Sixop FM synthesizer');
+    stage.setAttribute('aria-label', 'FM synthesizer');
+    const at = (node, x, y) => { node.style.left = x + 'px'; node.style.top = y + 'px'; return node; };
+
+    // left knob block: MASTER / SELECT over PRESETS / ALGORITHM
+    this.makePot(at(el('div', 'knob-slot', stage), 102, 114), 'MASTER', 'MASTER');
+    this.makeEncoder(at(el('div', 'knob-slot', stage), 230, 114), 'SELECT', 'SELECT');
+    this.makeEncoder(at(el('div', 'knob-slot', stage), 102, 236), 'PRESETS', 'PRESETS');
+    this.makeEncoder(at(el('div', 'knob-slot', stage), 230, 236), 'ALGO', 'ALGORITHM');
+
+    // OCT- / OCT+ tray
+    const oct = el('div', 'tray oct-tray', stage);
+    this.makeButton(oct, 'OCTDN', 'OCT-');
+    this.makeButton(oct, 'OCTUP', 'OCT+');
 
     // screen
     const bez = el('div', 'bezel', stage);
     this.canvas = el('canvas', 'screen', bez);
     this.canvas.setAttribute('aria-label', 'Display');
-    el('div', 'bezel-label', bez, '<span>SIXOP</span><small>six-operator FM</small>');
 
-    // encoders
-    const encRow = el('div', 'enc-row', stage);
-    for (const [name, label] of ENCODERS) this.makeEncoder(encRow, name, label, 'big');
-    const knobRow = el('div', 'knob-row', stage);
-    for (let i = 1; i <= 4; i++) this.makeEncoder(knobRow, 'K' + i, String(i), 'small');
+    // KNOB1-4
+    [677, 810, 946, 1081].forEach((x, i) => this.makeEncoder(at(el('div', 'knob-slot', stage), x, 114), 'K' + (i + 1), 'KNOB' + (i + 1)));
 
-    // master pot
-    const pot = el('div', 'pot-wrap', stage);
-    this.makePot(pot, 'MASTER', 'master');
+    // 2 x 6 button block
+    const bt = el('div', 'tray btn-tray', stage);
+    const grid = el('div', 'btn-grid', bt);
+    for (const [name, label] of BUTTONS) if (name !== 'OCTDN' && name !== 'OCTUP') this.makeButton(grid, name, label);
+    el('i', 'pdot', bt);
 
-    // brand plate
-    el('div', 'plate', stage, '<b>SIXOP</b><span>FM · 6 OP · 32 ALG</span>');
-
-    // buttons
-    const bgrid = el('div', 'btn-grid', stage);
-    for (const [name, label] of BUTTONS) this.makeButton(bgrid, name, label);
-
-    // keyboard
-    const kb = el('div', 'keys', stage);
-    const top = el('div', 'krow black', kb), bot = el('div', 'krow white', kb);
-    let whiteIdx = 0;
-    const blacks = [];
+    // keyboard tray: 11 upper keys (sharps) over 16 lower keys (naturals)
+    const kb = el('div', 'tray keys', stage);
+    const PITCH = 67.3, X0 = 96 - 47; // first natural's centre, relative to the tray
+    let whiteIdx = 0, blackN = 0;
     for (let i = 0; i < KEY_COUNT; i++) {
-      if (BLACK(i)) blacks.push({ i, after: whiteIdx });
-      else { this.makeKey(bot, i, whiteIdx, false); whiteIdx++; }
+      if (BLACK(i)) this.makeKey(kb, i, X0 + PITCH * (whiteIdx - 0.5), true, blackN++);
+      else this.makeKey(kb, i, X0 + PITCH * whiteIdx++, false);
     }
+    // printed dots where the upper row has a gap (between E-F and B-C)
+    for (const w of [4, 7, 11, 14]) at(el('i', 'kdot', kb), X0 + PITCH * (w - 0.5), 123);
     this.whiteCount = whiteIdx;
-    blacks.forEach((b, n) => this.makeKey(top, b.i, b.after, true, n));
   }
 
   fit() {
-    const W = 1200, H = 800;
+    const W = 1200, H = 700;
     const vw = window.innerWidth, vh = window.innerHeight;
     const pad = Math.min(vw, vh) > 500 ? 12 : 0; // keep the case edge visible
     const s = Math.min((vw - pad * 2) / W, (vh - pad * 2) / H);
@@ -137,39 +142,39 @@ export class Panel {
     const b = el('div', 'btn', parent);
     b.dataset.name = name;
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', label);
+    b.setAttribute('aria-label', label.replace('/', ' '));
     const cap = el('div', 'cap', b);
-    const led = el('i', 'led', cap);
-    el('span', 'lbl', cap, label);
+    const led = el('i', 'led', cap);           // backlight behind the legend
+    el('span', 'lbl', cap, label.replace('/', '<hr>'));
     el('div', 'ring', b);
     this.leds.set(name, { el: led, node: b, state: 'dim' });
     this.bindPress(b, name, 'button');
   }
 
-  makeKey(parent, idx, slot, black, blackN) {
+  makeKey(parent, idx, cx, black, blackN) {
     const k = el('div', 'key ' + (black ? 'k-black' : 'k-white'), parent);
     k.dataset.idx = idx;
     k.setAttribute('role', 'button');
-    k.setAttribute('aria-label', 'Key ' + (idx + 1));
-    if (black) k.style.left = `calc(${slot} * var(--kw) - var(--kw) * 0.5 + var(--kgap) * 0.5)`;
-    else k.style.left = `calc(${slot} * var(--kw))`;
-    const led = el('i', 'kled', k);
-    const lab = el('span', 'klbl', k);
+    k.style.left = (cx - 29.5) + 'px';
+    const slot = el('i', 'kslot', k);
+    const led = el('i', 'kled', slot);         // light strip in the key's slot
+    const lab = el('span', 'klbl', k, black ? (EDIT_KEY_LABELS[blackN] || '') : '');
+    k.setAttribute('aria-label', (black && EDIT_KEY_LABELS[blackN]) ? EDIT_KEY_LABELS[blackN] : 'Key ' + (idx + 1));
     if (black) k.dataset.edit = blackN;
     this.keyEls[idx] = { node: k, led, lab, black, blackN };
     this.leds.set('KEY' + idx, { el: led, node: k, state: 'dim' });
     this.bindPress(k, idx, 'key', { black, blackN });
   }
 
-  makeEncoder(parent, name, label, size) {
-    const w = el('div', 'enc-wrap ' + size, parent);
+  makeEncoder(parent, name, label) {
+    const w = el('div', 'enc-wrap', parent);
+    el('div', 'enc-lbl', w, label);
     const e = el('div', 'enc', w);
     e.setAttribute('role', 'slider');
     e.setAttribute('aria-label', label);
     e.tabIndex = 0;
     el('div', 'enc-grip', e);
     const ind = el('div', 'enc-ind', e);
-    el('div', 'enc-lbl', w, label);
     this.encAngles[name] = 0;
     const turn = (steps, speed) => {
       this.encAngles[name] += steps * 15;
@@ -217,11 +222,12 @@ export class Panel {
   }
 
   makePot(parent, name, label) {
-    const w = el('div', 'pot ' + name.toLowerCase(), parent);
-    const knob = el('div', 'pot-knob', w);
+    const wrap = el('div', 'enc-wrap', parent);
+    el('div', 'enc-lbl', wrap, label);
+    const w = el('div', 'pot ' + name.toLowerCase(), wrap);
+    const knob = el('div', 'pot-knob enc', w);
+    el('div', 'enc-grip', knob);
     el('div', 'pot-ind', knob);
-    el('div', 'pot-scale', w);
-    el('div', 'enc-lbl', parent, label);
     knob.setAttribute('role', 'slider');
     knob.setAttribute('aria-label', label);
     knob.tabIndex = 0;
@@ -253,7 +259,7 @@ export class Panel {
 
   // ---------- LEDs ----------
   setLed(name, state) { const l = this.leds.get(name); if (l) l.state = state; }
-  setKeyLabel(idx, text) { const k = this.keyEls[idx]; if (k) k.lab.textContent = text || ''; }
+  setKeyLabel() { /* legends are printed on the keys */ }
   setLatched(name, on) { const l = this.leds.get(name); if (l) l.node.classList.toggle('latched', !!on); }
   setDisabled(name, on) { const l = this.leds.get(name); if (l) l.node.classList.toggle('disabled', !!on); }
 

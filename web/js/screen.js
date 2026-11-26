@@ -3,6 +3,7 @@
 import { ALGOS } from './dx7.js';
 
 export const SCREEN_THEMES = [
+  { name: 'LCD', font: '"Helvetica Neue", Arial, sans-serif', bg: '#c3d4ea', widget: '#a2b2c6', widgetOn: '#4d6079', footer: '#eef3f9', wave: '#1d2b3d', text: '#151a21', dim: '#4f5d6e', border: '#7f90a6', accent: '#151a21', textOn: '#f4f7fb' },
   { name: 'Amber', bg: '#15110c', widget: '#2a2219', widgetOn: '#e8a33d', footer: '#3a2e20', wave: '#ffb347', text: '#f6e6cc', dim: '#8d7a60', border: '#4a3b28', accent: '#ff7a2f', textOn: '#1b130a' },
   { name: 'Ice', bg: '#0b1218', widget: '#16222d', widgetOn: '#7cc8ff', footer: '#1f3040', wave: '#8fe3ff', text: '#e3f2ff', dim: '#6f8799', border: '#2b4155', accent: '#5ad1ff', textOn: '#06121c' },
   { name: 'Moss', bg: '#0e140d', widget: '#1c2619', widgetOn: '#a8d672', footer: '#263421', wave: '#b9f27c', text: '#e8f5dc', dim: '#7b8f6c', border: '#34472d', accent: '#c6f06a', textOn: '#0f170c' },
@@ -22,7 +23,7 @@ export class Screen {
     g.textBaseline = 'middle';
   }
   text(str, x, y, size = 12, color = this.theme.text, align = 'left', weight = 600) {
-    const g = this.g; g.font = `${weight} ${size}px ${FONT}`; g.fillStyle = color; g.textAlign = align; g.fillText(str, x, y);
+    const g = this.g; g.font = `${weight} ${size}px ${this.theme.font || FONT}`; g.fillStyle = color; g.textAlign = align; g.fillText(str, x, y);
   }
   rrect(x, y, w, h, r, fill, stroke) {
     const g = this.g; g.beginPath();

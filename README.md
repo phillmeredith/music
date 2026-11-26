@@ -3,8 +3,8 @@
 A six-operator FM synthesizer that runs in the browser and installs to an iPad
 or desktop home screen as a PWA. It is modelled on the M-Vave FM-1: the same
 engine family, page layout, button behaviour, effects chain, arpeggiator,
-sequencer and MIDI handling, with an original panel design and original
-presets.
+sequencer and MIDI handling, and a panel laid out like the hardware (cream
+case, black encoders, brown pads, light-blue LCD). The presets are original.
 
 ## Run it
 
