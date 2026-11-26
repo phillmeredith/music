@@ -349,7 +349,7 @@ export class Guide {
   quietKeys() { const st = this.step(); return !!this.songLesson || !!(st && st.demo); }
   stopAll() { if (this.allStop) { this.allStop(); this.allStop = null; this.lastKey = ''; } }
 
-  // play the step's keys with a white glow, then hand over with a green one
+  // play the step's keys with a white glow, then hand over with a yellow one (green once pressed)
   startDemo(st) {
     const a = this.app, notes = st.demo.keys.map((k) => 53 + k + 12 * st.demo.oct);
     const c = a.engine.ctx; if (c && c.state !== 'running') c.resume().catch(() => {});
@@ -449,7 +449,7 @@ export class Guide {
     const nowLine = live ? `<div class="g-now ${ok ? 'ok' : ''}"><span>Now</span>${live}</div>` : '';
     const redo = st.redo && !req ? '<button class="g-redo">Redo</button>' : '';
     const demo = st.demo && !req;
-    const shown = demo ? (this.demoing ? '👀 Watch and listen…' : 'Now your turn! ' + text.replace(/glowing/g, 'green')) : text;
+    const shown = demo ? (this.demoing ? '👀 Watch and listen…' : 'Now your turn! ' + text.replace(/glowing/g, 'yellow')) : text;
     this.card.className = 'guide-card' + (ok ? ' ok' : '') + (req ? ' fix' : '') + (st.final ? ' centre' : '');
     this.card.innerHTML = `
       <div class="g-head">
@@ -526,7 +526,8 @@ export class Guide {
     const end = a0 + sg * SPAN, tip = pt(end + sg * 10), b0 = pt(end, R + 8), b1 = pt(end, R - 8);
     const svg = document.createElementNS(SVGNS, 'svg');
     svg.setAttribute('class', 'g-arc'); svg.setAttribute('width', 2 * c); svg.setAttribute('height', 2 * c);
-    svg.style.left = (size / 2 - c) + 'px'; svg.style.top = (size / 2 - c) + 'px';
+    const B = 3; // the ring's border: children are placed from inside it
+    svg.style.left = (size / 2 - c - B) + 'px'; svg.style.top = (size / 2 - c - B) + 'px';
     svg.style.filter = `drop-shadow(0 0 6px ${col})`;
     svg.innerHTML = `<path d="${path(a0, SPAN)}" fill="none" stroke="${col}" stroke-opacity="${0.28 + bad * 0.5}" stroke-width="5" stroke-linecap="round"/>
       ${prog > 0.01 ? `<path d="${path(a0, SPAN * prog)}" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round"/>` : ''}
@@ -542,7 +543,7 @@ export class Guide {
     const vw = window.innerWidth, vh = window.innerHeight;
     const rects = targets.map((t) => t.getBoundingClientRect());
     const hint = st.hint ? (typeof st.hint === 'function' ? st.hint(this.app) : st.hint) : '';
-    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + (hint && hint.d != null ? hint.d : '') + ok + vw + vh + this.demoing + !!this.activeReq;
+    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + (hint && hint.d != null ? hint.d : '') + ok + vw + vh + [...this.app.heldKeys.keys()].join(',') + this.demoing + !!this.activeReq;
     if (rk !== this.ringKey) {
       this.ringKey = rk;
       const pad = 8;
@@ -556,7 +557,8 @@ export class Guide {
       this.rings.innerHTML = '';
       rects.forEach((r, n) => {
         const keyStep = st.demo && !this.activeReq;
-        const g = el('div', 'g-ring' + (ok ? ' ok' : keyStep ? (this.demoing ? ' demo' : ' turn') : ''), this.rings);
+        const held = keyStep && !this.demoing && this.app.heldKeys.has(+targets[n].dataset.idx);
+        const g = el('div', 'g-ring' + (ok || held ? ' ok' : keyStep ? (this.demoing ? ' demo' : ' turn') : ''), this.rings);
         g.style.left = r.x - pad + 'px'; g.style.top = r.y - pad + 'px';
         g.style.width = r.width + pad * 2 + 'px'; g.style.height = r.height + pad * 2 + 'px';
         g.style.borderRadius = Math.min(r.width, r.height) / 2 + pad + 'px';

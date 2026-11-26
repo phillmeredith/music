@@ -24,9 +24,9 @@ export const H = {
 
 // kind words for a wrong key: never a telling-off
 export const TRY_AGAIN = [
-  'Oops, not that one. Try a green key 🙂',
+  'Oops, not that one. Try a yellow key 🙂',
   'So close! Have another go.',
-  'No worries. Look for the green glow.',
+  'No worries. Look for the yellow glow.',
   'Nearly! Try again, you’ve got this.',
   'That’s OK, mistakes help you learn. Try again!',
 ];
