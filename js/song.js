@@ -340,6 +340,8 @@ export class SongLesson {
     this.take.push({ at: performance.now(), n: note, v: vel });
     if (e.notes.includes(note)) {
       this.hit.add(note); this.oops = '';
+      const kk = document.querySelector(`.key[data-idx="${idx}"]`); // right key: flash green as it's pressed
+      if (kk) { kk.classList.remove('g-hit'); void kk.offsetWidth; kk.classList.add('g-hit'); setTimeout(() => kk.classList.remove('g-hit'), 350); }
       if (e.notes.every((n) => this.hit.has(n))) this.advance();
       else this.showKeys();
     } else {
@@ -393,7 +395,7 @@ export class SongLesson {
     const e = this.cur();
     const titles = {
       listen: '👀 Watch the white keys and listen…',
-      play: this.whole ? 'Play along: press the green keys' : 'Now your turn! Press the green keys',
+      play: this.whole ? 'Play along: press the yellow keys' : 'Now your turn! Press the yellow keys',
       done: '✓ Nice!',
       review: this.replaying ? '🔊 Here’s what you played…' : '✓ You played part ' + (this.p + 1) + '!',
       end: this.whole ? 'You played the whole song!' : 'You learned every part!',
