@@ -200,16 +200,53 @@ export function sequencerToSong(app, title) {
 }
 
 // ---------------------------------------------------------------- saved songs
-export function loadSongs() { try { return JSON.parse(localStorage.getItem(STORE) || '[]'); } catch { return []; } }
+// Songs live in a shared library on the server (paired devices only), with a
+// copy kept on the device so they work offline. A song added while offline or
+// before pairing waits in STORE and is sent at the next sync.
+const SHARED = 'sixop.shared';
+const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch { return []; } };
+const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* full */ } };
+export let libraryState = 'unknown';               // ok | locked | offline | unknown
+
+export function loadSongs() {
+  return [...read(SHARED).map((x) => ({ ...x, shared: true })), ...read(STORE).map((x) => ({ ...x, pending: true }))];
+}
 export function saveSong(song) {
   const all = loadSongs();
   const base = song.title; let n = 2;
   while (all.some((x) => x.title === song.title)) song.title = `${base} ${n++}`;
-  all.unshift(song);
-  try { localStorage.setItem(STORE, JSON.stringify(all.slice(0, 40))); } catch { /* full */ }
+  write(STORE, [song, ...read(STORE)].slice(0, 40));
 }
-export function deleteSong(title) {
-  try { localStorage.setItem(STORE, JSON.stringify(loadSongs().filter((s) => s.title !== title))); } catch { /* ignore */ }
+export async function deleteSong(song) {
+  if (song.id) {
+    const r = await fetch('/api/songs/' + song.id, { method: 'DELETE', credentials: 'same-origin' }).catch(() => null);
+    if (!r || !r.ok) return false;
+    write(SHARED, read(SHARED).filter((x) => x.id !== song.id));
+  } else write(STORE, read(STORE).filter((x) => x.title !== song.title));
+  return true;
+}
+// send waiting songs, then fetch the library; resolves true if the list changed
+export async function syncSongs() {
+  const before = JSON.stringify(loadSongs().map((x) => x.id || x.title));
+  try {
+    const waiting = read(STORE);
+    for (const song of waiting) {
+      const r = await fetch('/api/songs', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(song) });
+      if (r.status === 401) { libraryState = 'locked'; return false; }
+      if (!r.ok) break;
+      write(STORE, read(STORE).filter((x) => x.title !== song.title));
+    }
+    const r = await fetch('/api/songs', { credentials: 'same-origin', cache: 'no-store' });
+    if (r.status === 401) { libraryState = 'locked'; return false; }
+    if (!r.ok) throw new Error(r.status);
+    write(SHARED, (await r.json()).songs || []);
+    libraryState = 'ok';
+  } catch { libraryState = 'offline'; }
+  return JSON.stringify(loadSongs().map((x) => x.id || x.title)) !== before;
+}
+export async function unlockLibrary(code) {
+  const r = await fetch('/api/unlock', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) }).catch(() => null);
+  return !!(r && r.ok);
 }
 
 // ---------------------------------------------------------------- the lesson
@@ -329,7 +366,7 @@ export class SongLesson {
       : `<div class="g-row"><button class="g-back" ${this.p === 0 ? 'disabled' : ''}>Back</button><button class="g-again">Hear it</button><button class="g-slow">${this.slow ? 'Normal' : 'Slow'}</button><button class="g-skip">Skip</button></div>`;
     this.card.className = 'guide-card song' + (this.mode === 'done' || this.mode === 'end' ? ' ok' : '');
     this.card.innerHTML = `
-      <div class="g-head"><span class="g-sec">${this.song.title}</span><span class="g-count">${this.whole ? 'Whole song' : `Part ${Math.min(this.p + 1, n)} / ${n}`}</span><button class="g-x" aria-label="Close">✕</button></div>
+      <div class="g-head"><span class="g-sec">${String(this.song.title).replace(/[&<>"]/g, "")}</span><span class="g-count">${this.whole ? 'Whole song' : `Part ${Math.min(this.p + 1, n)} / ${n}`}</span><button class="g-x" aria-label="Close">✕</button></div>
       <div class="g-bar"><i style="width:${this.mode === 'end' ? 100 : pct}%"></i></div>
       <h3>${titles[this.mode]}</h3>${body}${row}`;
     const on = (sel, fn) => { const b = this.card.querySelector(sel); if (b) b.onclick = fn; };

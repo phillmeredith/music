@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION whenever any cached file changes.
-const VERSION = 'sixop-7';
+const VERSION = 'sixop-8';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'engine.wasm', 'worklet.js',
   'js/main.js', 'js/app.js', 'js/audio.js', 'js/dx7.js', 'js/feedback.js', 'js/midi.js', 'js/panel.js',
@@ -21,6 +21,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
+  if (url.origin === location.origin && url.pathname.startsWith('/api/')) return; // the song library is always live
   // same-origin files not in the install list (the note-detection model) are kept after first use
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request).then((res) => {
     if (res.ok && url.origin === location.origin) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
