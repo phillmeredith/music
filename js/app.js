@@ -461,7 +461,8 @@ export class App {
       this.heldKeys.set(idx, note);
       if (this.guide && this.guide.songLesson) this.guide.songLesson.onKey(idx, 'down', note, vel);
       this.engine.key(note, vel);
-      this.fb.key(vel);
+      // in a lesson the key's click sound would colour the note, so it's touch only there
+      if (this.guide && this.guide.quietKeys()) this.fb.vibrate(6); else this.fb.key(vel);
       if (this.seqOn && this.seqVals[P.P_SEQ_REC]) { this.recKeyStep = this.seqVals[P.P_SEQ_CURSOR] || 0; this.s.dirty.pattern = true; }
     } else if (ev === 'up') {
       const note = this.heldKeys.get(idx);

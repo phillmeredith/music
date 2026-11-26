@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION whenever any cached file changes.
-const VERSION = 'sixop-12';
+const VERSION = 'sixop-13';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'engine.wasm', 'worklet.js',
   'js/main.js', 'js/app.js', 'js/audio.js', 'js/dx7.js', 'js/feedback.js', 'js/midi.js', 'js/panel.js',
