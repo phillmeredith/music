@@ -129,6 +129,7 @@ void seqarp_block(int nsamples);    /* advance clocks; emits notes */
 void arp_note(int note, int vel, int on);
 int arp_active(void);
 void seq_record_note(int note, int vel, int on);
+int seq_panel_part(void);
 void seq_cmd(int cmd, int a, int b);
 void seqarp_clock_tick(void);       /* MIDI clock F8 */
 void seqarp_transport(int start);   /* FA/FB start=1, FC stop=0 */

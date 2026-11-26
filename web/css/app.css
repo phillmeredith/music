@@ -206,3 +206,64 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .cap, .key { transition: none !important; }
 }
+
+/* ------------------------------------------------------------------ guide */
+.guide-launch {
+  position: fixed; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); z-index: 30;
+  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 6px; border: 0; border-radius: 17px;
+  background: rgba(40,28,20,.78); color: #fff4e6; font: 700 13px/1 "Helvetica Neue", Arial, sans-serif; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25); touch-action: manipulation;
+}
+.guide-launch span { width: 22px; height: 22px; border-radius: 50%; background: #e08a46; display: grid; place-items: center; }
+.guide-launch.on b::after { content: ' · stop'; font-weight: 500; opacity: .75; }
+.guide-layer { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+.guide-layer[hidden] { display: none; }
+.guide-layer.modal { pointer-events: auto; background: rgba(20,14,8,.5); }
+.guide-dim { position: absolute; inset: 0; width: 100%; height: 100%; }
+.guide-layer.modal .guide-dim { display: none; }
+.g-ring {
+  position: absolute; border: 3px solid #ffb562; box-shadow: 0 0 0 4px rgba(255,181,98,.3), 0 0 22px 6px rgba(255,170,80,.55);
+  animation: g-pulse 1.3s ease-in-out infinite;
+}
+.g-ring.ok { border-color: #7fe08a; box-shadow: 0 0 0 4px rgba(127,224,138,.35), 0 0 22px 6px rgba(127,224,138,.5); animation: none; }
+@keyframes g-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: .75; } }
+.g-hint {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
+  padding: 4px 10px; border-radius: 12px; background: #ffb562; color: #2a1608; font: 800 13px/1.2 "Helvetica Neue", Arial, sans-serif;
+  animation: none;
+}
+.guide-card {
+  position: fixed; width: min(330px, calc(100vw - 20px)); pointer-events: auto;
+  padding: 12px 14px 12px; border-radius: 16px; background: #fffaf2; color: #2b1d12;
+  font: 15px/1.35 "Helvetica Neue", Arial, sans-serif; box-shadow: 0 12px 34px rgba(0,0,0,.35);
+  transition: left 200ms ease, top 200ms ease, box-shadow 200ms;
+  -webkit-user-select: none; user-select: none;
+}
+.guide-card.centre { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; }
+.guide-card.ok { box-shadow: 0 0 0 3px #7fe08a, 0 12px 34px rgba(0,0,0,.35); }
+.guide-card.fix { box-shadow: 0 0 0 3px #ffb562, 0 12px 34px rgba(0,0,0,.35); }
+.g-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8a6a50; font-weight: 700; }
+.g-sec { flex: 1; text-transform: uppercase; letter-spacing: .06em; }
+.g-x { border: 0; background: none; font-size: 16px; color: #8a6a50; cursor: pointer; padding: 2px 4px; }
+.g-bar { height: 4px; border-radius: 2px; background: #efe2d2; margin: 6px 0 8px; overflow: hidden; }
+.g-bar i { display: block; height: 100%; background: #e08a46; transition: width 300ms; }
+.guide-card h2 { margin: 6px 0 6px; font-size: 21px; }
+.guide-card h3 { margin: 2px 0 8px; font-size: 18px; line-height: 1.25; }
+.guide-card.ok h3 { color: #2f8a3b; }
+.guide-card p { margin: 6px 0; }
+.g-oops { font-size: 12px; font-weight: 800; color: #c4621d; text-transform: uppercase; letter-spacing: .05em; }
+.g-why { font-size: 13.5px; color: #6b5442; }
+.g-warn { font-size: 13.5px; color: #a33d14; font-weight: 600; }
+.g-now, .g-goal { display: flex; gap: 8px; align-items: baseline; font-size: 15px; font-weight: 700; margin: 3px 0; }
+.g-now span, .g-goal span { width: 38px; font-size: 11px; color: #9a7d65; text-transform: uppercase; letter-spacing: .05em; }
+.g-now.ok { color: #2f8a3b; }
+.g-row { display: flex; gap: 8px; margin-top: 10px; }
+.g-row button { flex: 1; min-height: 40px; border-radius: 12px; border: 0; font: 700 14px/1 "Helvetica Neue", Arial, sans-serif; cursor: pointer; touch-action: manipulation; }
+.g-back, .g-skip { background: #f0e4d5; color: #5a4231; }
+.g-back[disabled] { opacity: .4; }
+.g-redo { background: #ffe2c2; color: #7a3d12; }
+.g-go { background: #e08a46; color: #fff; }
+.g-lesson { display: block; width: 100%; text-align: left; margin: 8px 0 0; padding: 12px 14px; border: 0; border-radius: 12px; background: #f6eadb; cursor: pointer; font: inherit; color: inherit; }
+.g-lesson b { display: block; font-size: 17px; }
+.g-lesson span { display: block; font-size: 14px; color: #6b5442; margin: 2px 0; }
+.g-lesson small { color: #9a7d65; font-weight: 700; }

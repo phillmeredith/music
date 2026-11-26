@@ -341,6 +341,7 @@ void synth_panic(void)
 static int part_listens(int pi, int ch, int from_panel)
 {
   sx_part *p = &parts[pi];
+  if (from_panel) { int sp = seq_panel_part(); if (sp >= 0) return pi == sp; }
   if (!p->on) return 0;
   if (from_panel) ch = midi_ch == 0 ? 1 : midi_ch;
   if (midi_ch != 0 && !from_panel && ch != midi_ch && p->ch == 0) return 0;

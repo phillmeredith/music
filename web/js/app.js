@@ -9,6 +9,7 @@ import { Midi } from './midi.js';
 import { P } from './params.js';
 import { OPF, G, opOff, voiceName, setVoiceName, parseSysex, parseRawBank, buildBankSysex, vcedToVmem, vmemToVced } from './dx7.js';
 import { makeVoice } from './presets.js';
+import { Guide } from './guide.js';
 
 export const RATE_NAMES = ['1/1', '1/2', '1/4', '1/4T', '1/8', '1/8T', '1/16', '1/16T', '1/32'];
 const RATE_TICKS = [96, 48, 24, 16, 12, 8, 6, 4, 3];
@@ -61,7 +62,8 @@ export class App {
     this.engine.onstatus = (s) => this.onStatus(s);
     this.panel.canvas.addEventListener('click', () => this.onScreenTap());
     this.setupFileDrop();
-    const loop = () => { this.draw(); this.updateLeds(); requestAnimationFrame(loop); };
+    this.guide = new Guide(this);
+    const loop = () => { this.draw(); this.updateLeds(); this.guide.tick(); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
 
@@ -203,7 +205,12 @@ export class App {
       case 'SEQ': {
         const sp = (id, label, min, max, fmt = (x) => x) => ({
           label, min, max, fmt, get: () => this.seqVals[id] ?? 0,
-          set: (x) => { this.seqVals[id] = x; this.engine.set(id, x); this.s.dirty.pattern = true; this.captureSeqSoon(); },
+          set: (x) => {
+            this.seqVals[id] = x; this.engine.set(id, x); this.s.dirty.pattern = true;
+            if (id === P.P_SEQ_PART) this.followSeqVoice(x);
+            if (id === P.P_SEQ_PATTERN) this.refreshSeqVals().then(() => this.followSeqVoice(this.seqVals[P.P_SEQ_PART] || 0));
+            this.captureSeqSoon();
+          },
         });
         return [
           { title: 'Sequencer', params: [sp(P.P_SEQ_PATTERN, 'Pattern', 0, 15, (x) => x + 1),
@@ -296,7 +303,7 @@ export class App {
         this.toast('Octave & transpose reset'); this.store.touch();
         return;
       }
-      if (this.overlay && this.overlay.type !== 'presets' && name !== 'SAVE' && name !== 'SEL' && this.overlay.type !== 'algo') {
+      if (this.overlay && this.overlay.type !== 'presets' && this.overlay.type !== 'algo' && name !== 'SAVE' && name !== 'SEL' && this.overlay.type !== 'algo') {
         if (name === 'HOME' || this.overlay.type !== 'rename') { this.overlay = null; if (name === 'HOME') return; }
       }
       this.comboUsed = false;
@@ -340,6 +347,8 @@ export class App {
       case 'EDIT': this.setMode(this.mode === 'EDIT' ? 'HOME' : 'EDIT'); break;
       case 'GLO': this.setMode(this.mode === 'GLOBE' ? 'HOME' : 'GLOBE'); break;
       case 'SEL':
+        if (this.overlay && this.overlay.type === 'presets') { this.overlay = null; this.fb.engage(); break; }
+        if (this.seqOn && this.seqVals[P.P_SEQ_REC]) { this.seqRest(); break; }
         if (this.mode === 'FX') { this.fxGrab = !this.fxGrab; this.fxGrab ? this.fb.engage() : this.fb.disengage(); }
         break;
       case 'SAVE': this.saveMenu(); break;
@@ -390,6 +399,21 @@ export class App {
       this.seqOn = 0; this.engine.set(P.P_SEQ_ON, 0); this.fb.disengage();
       this.seqVals[P.P_SEQ_PLAY] = 0; this.seqVals[P.P_SEQ_REC] = 0; this.setMode('HOME'); this.captureSeqSoon();
     } else this.setMode('SEQ');
+  }
+  // the pattern's voice becomes the current voice, and is switched on, so the
+  // keys, the PRESETS knob and the screen header all follow the track you're on
+  followSeqVoice(p) {
+    this.s.ui.curPart = p;
+    const pt = this.s.parts[p];
+    if (!pt.on) { pt.on = 1; this.store.partParam(p, P.PP_ON, 1); this.toast('V' + (p + 1) + ' on'); }
+    this.store.touch();
+  }
+  // REC + SEL: leave this step empty and move on
+  seqRest() {
+    const len = this.seqVals[P.P_SEQ_STEPS] || 16;
+    this.engine.seqCmd(4, 0, 0);
+    this.seqVals[P.P_SEQ_CURSOR] = ((this.seqVals[P.P_SEQ_CURSOR] || 0) + 1) % len;
+    this.fb.detent(); this.toast('Rest · step ' + (this.seqVals[P.P_SEQ_CURSOR] + 1), 600);
   }
   setSeqPlay(v) {
     this.seqVals[P.P_SEQ_PLAY] = v;
@@ -836,7 +860,8 @@ export class App {
         if (this.s.global.beatTick) this.fb.beat();
       }
     }
-    if (this.seqOn) {
+    // follow pattern switches made by the engine while playing a single pattern
+    if (this.seqOn && this.seqVals[P.P_SEQ_PLAY] && !this.seqVals[P.P_SEQ_ARRANGE] && st.seqPattern >= 0) {
       this.seqVals[P.P_SEQ_PATTERN] = st.seqPattern;
     }
   }

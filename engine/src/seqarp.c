@@ -281,6 +281,10 @@ static void seq_run(double now)
 
 /* step entry: the first key writes the cursor step, more keys held add a chord,
  * releasing every key moves the cursor on */
+/* In SEQ mode the panel keys play the current pattern's voice, so each
+   track can be auditioned and recorded with its own sound. */
+int seq_panel_part(void) { return seq_on ? P(seq_pat)->part : -1; }
+
 void seq_record_note(int note, int vel, int on)
 {
   if (!seq_on || !seq_rec) return;
