@@ -262,7 +262,7 @@ export class SongLesson {
     this.mode = 'listen'; this.slow = false; this.whole = false;
     this.timers = [];
     this.marks = new Set();
-    this.take = [];
+    this.take = []; this.takes = [];
   }
 
   start() {
@@ -280,10 +280,10 @@ export class SongLesson {
 
   // ----- phrase playback
   clearTimers() { this.timers.forEach(clearTimeout); this.timers = []; }
-  listen(hearOnly = false) {
+  listen(hearOnly = false, all = false) {
     this.clearTimers(); this.app.engine.panic(); this.clearMarks();
     if (!hearOnly) { this.mode = 'listen'; this.k = 0; this.hit.clear(); }
-    const idx = this.ph[this.p], sp = this.slow ? 1.6 : 1;
+    const idx = all ? this.ph.slice(0, this.p + 1).flat() : this.ph[this.p], sp = this.slow ? 1.6 : 1;
     const t0 = this.ev[idx[0]].t;
     idx.forEach((i) => {
       const e = this.ev[i], at = (e.t - t0) * sp * 1000 + 300;
@@ -344,6 +344,7 @@ export class SongLesson {
     this.app.fb.saved && this.app.fb.saved();
     if (this.whole) { this.mode = 'done'; this.clearMarks(); this.show(); this.timers.push(setTimeout(() => this.nextPhrase(), 900)); return; }
     this.mode = 'review'; this.clearMarks();
+    this.takes[this.p] = this.take.slice();
     this.timers.push(setTimeout(() => this.playTake(), 500));
     this.show();
   }
@@ -357,9 +358,9 @@ export class SongLesson {
   startPlay(keepTake) { this.mode = 'play'; this.k = 0; this.hit.clear(); if (!keepTake) this.take = []; }
 
   // play back his own presses with his timing (long pauses shortened)
-  playTake() {
+  playTake(all = false) {
     this.clearTimers(); this.app.engine.panic();
-    const take = this.take || []; if (!take.length) return;
+    const take = all ? this.takes.slice(0, this.p + 1).filter(Boolean).flat() : (this.take || []); if (!take.length) return;
     this.replaying = true; this.show();
     let t = 0;
     take.forEach((x, i) => {
@@ -391,6 +392,7 @@ export class SongLesson {
     const mine = this.take && this.take.length ? '<button class="g-mine">Hear mine</button>' : '';
     const row = this.mode === 'review'
       ? `<div class="g-row">${mine}<button class="g-again">Hear original</button></div>
+         ${this.p > 0 ? '<div class="g-row"><button class="g-allmine">All mine so far</button><button class="g-all">All so far</button></div>' : ''}
          <div class="g-row"><button class="g-retry">Start over</button><button class="g-go g-next">${this.p + 1 >= n ? 'Finish' : 'Continue'}</button></div>`
       : this.mode === 'end'
       ? `${this.whole ? `<div class="g-row">${mine}<button class="g-retry">Play again</button></div>` : ''}<div class="g-row"><button class="g-whole">Play all</button><button class="g-seq g-go">Make it a beat</button></div>`
@@ -408,6 +410,8 @@ export class SongLesson {
     on('.g-skip', () => { this.clearTimers(); this.nextPhrase(); });
     on('.g-whole', () => { this.whole = true; this.p = 0; this.startPlay(); this.show(); });
     on('.g-mine', () => this.playTake());
+    on('.g-allmine', () => this.playTake(true));
+    on('.g-all', () => { this.replaying = false; this.listen(true, true); });
     on('.g-retry', () => { this.clearTimers(); this.app.engine.panic(); if (this.mode === 'end') { this.whole = true; this.p = 0; this.startPlay(); this.show(); } else this.listen(); });
     on('.g-next', () => { this.clearTimers(); this.app.engine.panic(); this.replaying = false; this.nextPhrase(); });
     on('.g-seq', () => {
