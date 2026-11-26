@@ -4,6 +4,10 @@
 // Steps check what the synth is doing, not which button was pressed, so any
 // route to the right result counts, and a wrong turn shows how to get back.
 import { LESSONS } from './lessons.js';
+import { SongLesson, makeSong, events, parseMidi, sequencerToSong, loadSongs, saveSong, deleteSong } from './song.js';
+import { BUILTIN_SONGS } from './songs-builtin.js';
+import { decodeFile, transcribe } from './transcribe.js';
+import { youtubeId, makePlayer, canShareTab, Recorder } from './listen.js';
 
 
 const el = (tag, cls, parent, html) => {
@@ -29,28 +33,232 @@ export class Guide {
     this.card.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.launcher = el('button', 'guide-launch', document.body, '<span>?</span><b>Learn</b>');
     this.launcher.setAttribute('aria-label', 'Open lessons');
-    this.launcher.addEventListener('click', () => (this.lesson ? this.stop() : this.menu()));
+    this.launcher.addEventListener('click', () => (this.lesson || this.songLesson ? this.stop() : this.menu()));
     window.addEventListener('resize', () => { this.lastKey = ''; });
     if (new URLSearchParams(location.search).get('guide')) setTimeout(() => this.menu(), 300);
   }
 
   // ------------------------------------------------------------ lifecycle
   menu() {
+    this.endSong();
     this.lesson = null;
     this.layer.hidden = false; this.layer.classList.add('modal');
     this.clearHighlights();
-    const items = LESSONS.map((l, n) => `
+    const songs = [...BUILTIN_SONGS.map((x) => ({ ...x, builtin: true })), ...loadSongs()];
+    const lessons = LESSONS.map((l, n) => `
       <button class="g-lesson" data-n="${n}">
         <b>${l.title}</b><span>${l.blurb}</span><small>About ${l.minutes} minutes</small>
       </button>`).join('');
+    const songItems = songs.map((x, n) => `
+      <div class="g-songrow"><button class="g-lesson g-song" data-n="${n}">
+        <b>${x.title}</b><span>${x.blurb || (x.source ? 'From ' + x.source : 'Your song')}</span>
+      </button>${x.builtin ? '' : `<button class="g-del" data-n="${n}" aria-label="Delete ${x.title}">🗑</button>`}</div>`).join('');
     this.card.className = 'guide-card centre';
     this.card.innerHTML = `
       <div class="g-head"><span class="g-sec">Lessons</span><button class="g-x" aria-label="Close">✕</button></div>
       <h2>Learn by making something</h2>
-      <p>Pick a lesson. A glow shows what to touch, and it moves on by itself when you get it right.</p>
-      ${items}`;
+      <p class="g-why">A glow shows what to touch, and it moves on by itself when you get it right.</p>
+      <h4>Make a beat</h4>${lessons}
+      <h4>Learn a song</h4>${songItems}
+      <h4>Add a song</h4>
+      <div class="g-add">
+        <button data-a="audio">🎵<b>Music file</b><small>MP3, M4A, WAV</small></button>
+        <button data-a="youtube">▶︎<b>YouTube</b><small>paste a link</small></button>
+        <button data-a="midi">🎹<b>MIDI file</b><small>exact notes</small></button>
+        <button data-a="seq">▦<b>My beat</b><small>from the sequencer</small></button>
+      </div>`;
     this.card.querySelector('.g-x').onclick = () => this.stop();
-    this.card.querySelectorAll('.g-lesson').forEach((b) => { b.onclick = () => this.intro(LESSONS[+b.dataset.n]); });
+    this.card.querySelectorAll('.g-lesson:not(.g-song)').forEach((b) => { b.onclick = () => this.intro(LESSONS[+b.dataset.n]); });
+    this.card.querySelectorAll('.g-song').forEach((b) => { b.onclick = () => this.startSong(songs[+b.dataset.n]); });
+    this.card.querySelectorAll('.g-del').forEach((b) => { b.onclick = () => { deleteSong(songs[+b.dataset.n].title); this.menu(); }; });
+    this.card.querySelectorAll('.g-add button').forEach((b) => { b.onclick = () => this.add(b.dataset.a); });
+  }
+
+  // ------------------------------------------------------------ songs
+  async ensurePower() { if (!this.app.powered) await this.app.powerOn(); }
+  async startSong(song) {
+    await this.ensurePower();
+    this.endSong();
+    this.lesson = null;
+    this.layer.hidden = false; this.layer.classList.remove('modal');
+    this.clearHighlights();
+    this.launcher.classList.add('on');
+    if (song.voice != null) this.app.store.loadPreset(this.app.cur, song.voice);
+    this.songLesson = new SongLesson(this.app, this.card, song, () => this.stop());
+    this.songLesson.start();
+  }
+  endSong() { if (this.songLesson) { this.songLesson.stop(); this.songLesson = null; } }
+
+  working(title, text, pct, cancel) {
+    this.layer.hidden = false; this.layer.classList.add('modal');
+    this.card.className = 'guide-card centre';
+    this.card.innerHTML = `
+      <div class="g-head"><span class="g-sec">${title}</span><button class="g-x" aria-label="Close">✕</button></div>
+      <h3>${text}</h3>
+      ${pct != null ? `<div class="g-bar big"><i style="width:${Math.round(pct * 100)}%"></i></div>` : ''}
+      <p class="g-why">Working this out on the iPad. Nothing is uploaded.</p>`;
+    this.card.querySelector('.g-x').onclick = cancel || (() => this.menu());
+  }
+  fail(err) {
+    this.card.className = 'guide-card centre';
+    this.card.innerHTML = `
+      <div class="g-head"><span class="g-sec">Add a song</span><button class="g-x" aria-label="Close">✕</button></div>
+      <h3>That didn't work</h3><p class="g-warn">${(err && err.message) || err}</p>
+      <div class="g-row"><button class="g-go">Back</button></div>`;
+    this.card.querySelector('.g-x').onclick = () => this.menu();
+    this.card.querySelector('.g-go').onclick = () => this.menu();
+  }
+
+  pickFile(accept) {
+    return new Promise((res) => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = accept;
+      inp.onchange = () => res(inp.files[0] || null);
+      inp.click();
+    });
+  }
+  niceTitle(name) { return String(name || 'My song').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').slice(0, 40); }
+
+  async add(kind) {
+    await this.ensurePower();
+    try {
+      if (kind === 'audio') {
+        const f = await this.pickFile('audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac'); if (!f) return;
+        this.working('Music file', 'Reading the file…');
+        const buf = await decodeFile(this.app.engine.ctx, f);
+        return this.fromAudio(buf, this.niceTitle(f.name), 'a music file');
+      }
+      if (kind === 'midi') {
+        const f = await this.pickFile('.mid,.midi,audio/midi,audio/x-midi'); if (!f) return;
+        const m = parseMidi(await f.arrayBuffer());
+        if (!m.tracks.length) throw new Error('No notes found in that MIDI file.');
+        return this.pickTrack(m, this.niceTitle(f.name));
+      }
+      if (kind === 'seq') {
+        await this.app.refreshSeqVals();
+        const song = sequencerToSong(this.app, 'My beat ' + new Date().toLocaleDateString());
+        if (!song) throw new Error('The sequencer is empty. Record something first.');
+        return this.review(song);
+      }
+      if (kind === 'youtube') return this.youtube();
+    } catch (err) { this.fail(err); }
+  }
+
+  pickTrack(m, title) {
+    const tracks = m.tracks.map((t, i) => ({ ...t, i })).sort((a, b) => b.notes.length - a.notes.length);
+    this.card.className = 'guide-card centre';
+    this.card.innerHTML = `
+      <div class="g-head"><span class="g-sec">MIDI file</span><button class="g-x" aria-label="Close">✕</button></div>
+      <h3>Which part do you want to learn?</h3>
+      ${tracks.map((t) => `<button class="g-lesson g-tr" data-i="${t.i}"><b>${t.name}</b><small>${t.notes.length} notes</small></button>`).join('')}
+      <button class="g-lesson g-tr" data-i="all"><b>Everything together</b><small>all parts at once</small></button>`;
+    this.card.querySelector('.g-x').onclick = () => this.menu();
+    this.card.querySelectorAll('.g-tr').forEach((b) => {
+      b.onclick = () => {
+        const notes = b.dataset.i === 'all' ? m.tracks.flatMap((t) => t.notes) : m.tracks[+b.dataset.i].notes;
+        const song = makeSong(title, notes, m.bpm, 'a MIDI file');
+        if (!song) return this.fail('That part has no notes.');
+        this.review(song);
+      };
+    });
+  }
+
+  async fromAudio(buf, title, source) {
+    let cancelled = false;
+    this.working(title, 'Listening for notes…', 0, () => { cancelled = true; this.menu(); });
+    const notes = await transcribe(buf, {
+      melodyOnly: this.melodyOnly !== false,
+      onProgress: (p) => { if (!cancelled) { const i = this.card.querySelector('.g-bar i'); if (i) i.style.width = Math.round(p * 100) + '%'; } },
+    });
+    if (cancelled) return;
+    const song = makeSong(title, notes, null, source);
+    if (!song) throw new Error('No notes could be heard. Try a song with a clear tune, like a piano version.');
+    song.audio = buf; // kept for "try again with chords"
+    this.review(song);
+  }
+
+  // check the result, name it, keep it
+  review(song) {
+    const ev = events(song);
+    const len = song.notes.length ? song.notes[song.notes.length - 1].t : 0;
+    this.card.className = 'guide-card centre';
+    this.card.innerHTML = `
+      <div class="g-head"><span class="g-sec">New song</span><button class="g-x" aria-label="Close">✕</button></div>
+      <h3>Found ${ev.length} notes to play</h3>
+      <p class="g-why">${Math.round(len)} seconds of music at about ${song.bpm} beats a minute.</p>
+      <label class="g-field">Name<input class="g-name" maxlength="40" value="${song.title.replace(/"/g, '')}"></label>
+      ${song.audio ? `<label class="g-check"><input type="checkbox" class="g-chords" ${this.melodyOnly === false ? 'checked' : ''}> Include chords (harder)</label>` : ''}
+      <div class="g-row"><button class="g-hear">Hear it</button><button class="g-go g-keep">Learn it</button></div>`;
+    const name = this.card.querySelector('.g-name');
+    this.card.querySelector('.g-x').onclick = () => { this.app.engine.panic(); this.menu(); };
+    const ch = this.card.querySelector('.g-chords');
+    if (ch) ch.onchange = () => { this.melodyOnly = !ch.checked; this.fromAudio(song.audio, name.value || song.title, song.source).catch((e) => this.fail(e)); };
+    this.card.querySelector('.g-hear').onclick = () => this.preview(song);
+    this.card.querySelector('.g-keep').onclick = () => {
+      this.app.engine.panic(); clearTimeout(this.prevT);
+      const keep = { title: (name.value || song.title).trim() || 'My song', bpm: song.bpm, notes: song.notes, source: song.source };
+      saveSong(keep);
+      this.startSong(keep);
+    };
+  }
+  preview(song) {
+    const a = this.app; a.engine.panic();
+    (this.prevTimers || []).forEach(clearTimeout); this.prevTimers = [];
+    const first = song.notes.filter((x) => x.t < 15);
+    for (const x of first) {
+      this.prevTimers.push(setTimeout(() => a.engine.noteOn(a.cur, x.n, x.v || 90), x.t * 1000));
+      this.prevTimers.push(setTimeout(() => a.engine.noteOff(a.cur, x.n), (x.t + Math.min(x.d, 1)) * 1000));
+    }
+  }
+
+  async youtube() {
+    const tab = canShareTab();
+    this.layer.hidden = false; this.layer.classList.add('modal');
+    this.card.className = 'guide-card centre wide';
+    this.card.innerHTML = `
+      <div class="g-head"><span class="g-sec">YouTube</span><button class="g-x" aria-label="Close">✕</button></div>
+      <h3>Paste a YouTube link</h3>
+      <label class="g-field"><input class="g-url" placeholder="https://www.youtube.com/watch?v=…" inputmode="url"></label>
+      <div class="g-video"><div class="g-yt"></div></div>
+      <p class="g-why">${tab ? 'When you press Listen, choose <b>this tab</b> and switch on <b>Share tab audio</b>.' : 'Turn the volume up. The iPad listens through its microphone while the video plays, so keep the room quiet.'} Piano or melody versions of a song work best.</p>
+      <div class="g-row"><button class="g-go g-listen" disabled>Listen</button></div>`;
+    const url = this.card.querySelector('.g-url'), go = this.card.querySelector('.g-listen');
+    let player = null, rec = null, timer = 0, ended = false;
+    const cleanup = () => { clearInterval(timer); if (rec) { rec.stop(); rec = null; } try { player && player.destroy(); } catch { /* gone */ } };
+    this.card.querySelector('.g-x').onclick = () => { cleanup(); this.menu(); };
+    url.oninput = async () => {
+      const id = youtubeId(url.value);
+      go.disabled = !id;
+      if (!id) return;
+      try {
+        if (player) player.loadVideoById ? player.cueVideoById(id) : null;
+        else player = await makePlayer(this.card.querySelector('.g-yt'), id, (st) => { if (st === 0) ended = true; });
+      } catch (e) { this.fail(e); }
+    };
+    go.onclick = async () => {
+      if (rec) { finish(); return; }
+      try {
+        rec = new Recorder(this.app.engine.ctx);
+        await rec.start(tab);
+        player.playVideo();
+        go.textContent = 'Stop and work it out';
+        url.disabled = true;
+        timer = setInterval(() => {
+          const s = Math.round(rec.seconds);
+          this.card.querySelector('h3').textContent = `Listening… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}  ${'▮'.repeat(Math.min(10, Math.round(rec.level * 30)))}`;
+          if (ended || s >= 300) finish();
+        }, 250);
+      } catch (e) { cleanup(); this.fail(e.name === 'NotAllowedError' ? 'The app needs permission to listen. Allow the microphone (or tab sharing) and try again.' : e); }
+    };
+    const finish = () => {
+      clearInterval(timer);
+      try { player.pauseVideo(); } catch { /* gone */ }
+      const buf = rec.stop(); rec = null;
+      const title = (player.getVideoData && player.getVideoData().title) || 'YouTube song';
+      cleanup();
+      if (!buf || buf.duration < 2) return this.fail('That was too short to hear anything.');
+      this.fromAudio(buf, this.niceTitle(title), 'YouTube').catch((e) => this.fail(e));
+    };
   }
 
   intro(lesson) {
@@ -75,6 +283,7 @@ export class Guide {
   }
 
   stop() {
+    this.endSong();
     this.lesson = null;
     this.layer.hidden = true; this.layer.classList.remove('modal');
     this.launcher.classList.remove('on');

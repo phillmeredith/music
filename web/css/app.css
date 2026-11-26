@@ -267,3 +267,30 @@ html, body {
 .g-lesson b { display: block; font-size: 17px; }
 .g-lesson span { display: block; font-size: 14px; color: #6b5442; margin: 2px 0; }
 .g-lesson small { color: #9a7d65; font-weight: 700; }
+.guide-card.song { left: max(8px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); width: min(360px, calc(100vw - 120px)); }
+.guide-card.wide { width: min(560px, calc(100vw - 24px)); }
+.guide-card h4 { margin: 14px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: #9a7d65; }
+.g-songrow { display: flex; gap: 6px; align-items: stretch; }
+.g-songrow .g-lesson { flex: 1; }
+.g-del { margin-top: 8px; border: 0; border-radius: 12px; background: #f6eadb; width: 44px; cursor: pointer; font-size: 16px; }
+.g-add { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+.g-add button { border: 0; border-radius: 12px; background: #f6eadb; padding: 10px 4px; cursor: pointer; font: 20px/1.2 "Helvetica Neue", Arial, sans-serif; color: #2b1d12; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.g-add b { font-size: 13px; }
+.g-add small { font-size: 11px; color: #9a7d65; }
+.g-bar.big { height: 10px; border-radius: 5px; }
+.g-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #9a7d65; margin: 8px 0; }
+.g-field input { font: 16px "Helvetica Neue", Arial, sans-serif; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #e2d2bf; background: #fff; color: #2b1d12; -webkit-user-select: text; user-select: text; }
+.g-check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 6px 0; }
+.g-video { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #1a1410; border-radius: 10px; overflow: hidden; }
+.g-video iframe, .g-yt { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.g-go[disabled] { opacity: .45; }
+/* song lesson key lights */
+.key.g-next { box-shadow: 0 0 0 4px #ffb562, 0 0 24px 8px rgba(255,170,80,.75) !important; }
+.key.g-next .kslot { box-shadow: 0 0 10px 3px rgba(255,200,130,.9); }
+.key.g-next .kled { opacity: 1 !important; }
+.key.g-soon { box-shadow: 0 0 0 3px rgba(255,181,98,.45) !important; }
+.key.g-got { box-shadow: 0 0 0 4px #7fe08a, 0 0 18px 6px rgba(127,224,138,.6) !important; }
+.key.g-play { box-shadow: 0 0 0 4px #8fd0ff, 0 0 22px 8px rgba(120,190,255,.7) !important; }
+.key.g-play .kled { opacity: 1 !important; }
+.key.g-bad { box-shadow: 0 0 0 4px #ff6a5a, 0 0 18px 6px rgba(255,90,80,.6) !important; animation: g-shake 300ms; }
+@keyframes g-shake { 25% { margin-left: -3px; } 75% { margin-left: 3px; } }

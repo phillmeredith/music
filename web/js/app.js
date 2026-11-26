@@ -447,6 +447,7 @@ export class App {
       let vel = this.s.global.velocity;
       if (this.s.global.touchVel && x.h) vel = clamp(Math.round(30 + 97 * (x.y / x.h)), 1, 127);
       this.heldKeys.set(idx, note);
+      if (this.guide && this.guide.songLesson) this.guide.songLesson.onKey(idx, 'down', note);
       this.engine.key(note, vel);
       this.fb.key(vel);
       if (this.seqOn && this.seqVals[P.P_SEQ_REC]) { this.recKeyStep = this.seqVals[P.P_SEQ_CURSOR] || 0; this.s.dirty.pattern = true; }

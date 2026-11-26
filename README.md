@@ -52,6 +52,12 @@ web/               the PWA
   js/dx7.js        DX7 VMEM/VCED and SysEx import/export
   js/presets.js    the 128 original presets
   js/midi.js       Web MIDI
+  js/guide.js      the Learn overlay: lesson menu, step cards, add-a-song
+  js/lessons.js    the lofi beat lesson
+  js/song.js       follow-the-lights song lessons, MIDI parser, song to sequencer
+  js/transcribe.js audio file to notes, on the device (Basic Pitch)
+  js/listen.js     YouTube player and mic / tab-audio recorder
+  vendor/          Basic Pitch + TensorFlow.js bundle and model (see NOTICE.md)
   sw.js            offline cache (bump VERSION when files change)
 ```
 
@@ -113,7 +119,16 @@ Differences on purpose:
 ## Licence
 
 Code in `engine/vendor/fm1open/` is Apache-2.0 (see its NOTICE.md). The rest of
-this repository has no licence chosen yet.
+this repository has no licence chosen yet. `web/vendor/` holds Basic Pitch and
+TensorFlow.js, both Apache-2.0 (see `web/vendor/NOTICE.md`).
+
+## Lessons
+
+Tap **? Learn** on the panel. "Make a beat" walks through a lofi beat step by
+step. "Learn a song" lights up the keys phrase by phrase. "Add a song" turns an
+MP3 or other audio file, a MIDI file, a YouTube video (heard through the mic or
+shared tab audio) or the current sequencer beat into a new song lesson. Note
+detection runs on the device; nothing is uploaded.
 
 ## Deploy (music.phillm.dev)
 
