@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION whenever any cached file changes.
-const VERSION = 'sixop-16';
+const VERSION = 'sixop-17';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'engine.wasm', 'worklet.js',
   'js/main.js', 'js/app.js', 'js/audio.js', 'js/dx7.js', 'js/feedback.js', 'js/midi.js', 'js/panel.js',
@@ -8,7 +8,8 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache, so a new version never picks up old files
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

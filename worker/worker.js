@@ -74,11 +74,13 @@ export default {
     if (path.includes('..')) return new Response('Bad path', { status: 400 });
     if (path.endsWith('/')) path += 'index.html';
     const ext = (path.split('.').pop() || '').toLowerCase();
-    const r = await fetch(ORIGIN + path, { cf: { cacheTtl: 120, cacheEverything: true } });
+    // raw.githubusercontent caches for 5 minutes; a changing query gets a fresh copy every 30 s
+    const r = await fetch(ORIGIN + path + '?t=' + Math.floor(Date.now() / 30000), { cf: { cacheTtl: 30, cacheEverything: true } });
     if (!r.ok) return new Response('Not found', { status: 404 });
     const h = new Headers();
     h.set('content-type', TYPES[ext] || 'application/octet-stream');
-    h.set('cache-control', path === '/sw.js' || ext === 'html' ? 'no-cache' : 'public, max-age=300');
+    // app files always revalidate (updates show up at once); the big model files can be kept
+    h.set('cache-control', path.startsWith('/vendor/') ? 'public, max-age=86400' : 'no-cache');
     h.set('x-content-type-options', 'nosniff');
     if (path === '/sw.js') h.set('service-worker-allowed', '/');
     return new Response(req.method === 'HEAD' ? null : r.body, { status: 200, headers: h });
