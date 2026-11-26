@@ -252,7 +252,7 @@ export class Guide {
     (this.prevTimers || []).forEach(clearTimeout); this.prevTimers = [];
     const first = song.notes.filter((x) => x.t < 15);
     for (const x of first) {
-      this.prevTimers.push(setTimeout(() => a.engine.noteOn(a.cur, x.n, x.v || 90), x.t * 1000));
+      this.prevTimers.push(setTimeout(() => a.engine.noteOn(a.cur, x.n, a.s.global.velocity), x.t * 1000));
       this.prevTimers.push(setTimeout(() => a.engine.noteOff(a.cur, x.n), (x.t + Math.min(x.d, 1)) * 1000));
     }
   }
@@ -354,7 +354,7 @@ export class Guide {
     const c = a.engine.ctx; if (c && c.state !== 'running') c.resume().catch(() => {});
     this.demoing = true; this.ringKey = ''; this.lastKey = '';
     clearTimeout(this.demoT); clearTimeout(this.demoOffT); clearTimeout(this.demoEnd);
-    this.demoT = setTimeout(() => notes.forEach((n) => a.engine.noteOn(a.cur, n, 85)), 350);
+    this.demoT = setTimeout(() => notes.forEach((n) => a.engine.noteOn(a.cur, n, a.s.global.velocity)), 350);
     this.demoOffT = setTimeout(() => notes.forEach((n) => a.engine.noteOff(a.cur, n)), 1450);
     this.demoEnd = setTimeout(() => { this.demoing = false; this.ringKey = ''; this.lastKey = ''; }, 1900);
   }

@@ -267,6 +267,10 @@ export class SongLesson {
 
   start() {
     const a = this.app;
+    // keys and the demo must sound the same: only this lesson's voice plays
+    // (other voices that are switched on would layer on top of every key)
+    this.soloed = a.s.parts.map((pt) => pt.on);
+    a.s.parts.forEach((pt, i) => { if (i !== a.cur && pt.on) { pt.on = 0; a.store.partParam(i, P.PP_ON, 0); } });
     if (a.s.arp.on) a.toggleArp();
     if (a.seqVals[P.P_SEQ_PLAY]) a.setSeqPlay(0);
     if (a.seqOn) a.toggleSeq();
@@ -276,7 +280,12 @@ export class SongLesson {
     a.engine.panic();
     this.listen();
   }
-  stop() { this.clearTimers(); this.clearMarks(); this.app.engine.panic(); }
+  stop() {
+    this.clearTimers(); this.clearMarks(); this.app.engine.panic();
+    const a = this.app;
+    (this.soloed || []).forEach((was, i) => { if (was && !a.s.parts[i].on) { a.s.parts[i].on = 1; a.store.partParam(i, P.PP_ON, 1); } });
+    this.soloed = null;
+  }
 
   // ----- phrase playback
   clearTimers() { this.timers.forEach(clearTimeout); this.timers = []; }
@@ -288,7 +297,7 @@ export class SongLesson {
     idx.forEach((i) => {
       const e = this.ev[i], at = (e.t - t0) * sp * 1000 + 300;
       this.timers.push(setTimeout(() => {
-        e.notes.forEach((n) => this.app.engine.noteOn(this.app.cur, n, 90));
+        e.notes.forEach((n) => this.app.engine.noteOn(this.app.cur, n, this.app.s.global.velocity));
         this.mark(e.notes, 'g-play');
       }, at));
       this.timers.push(setTimeout(() => {
@@ -320,10 +329,10 @@ export class SongLesson {
   }
 
   // called by the app for every key press while a song lesson runs
-  onKey(idx, ev, note) {
+  onKey(idx, ev, note, vel) {
     if (ev !== 'down' || this.mode !== 'play') return;
     const e = this.cur(); if (!e) return;
-    this.take.push({ at: performance.now(), n: note });
+    this.take.push({ at: performance.now(), n: note, v: vel });
     if (e.notes.includes(note)) {
       this.hit.add(note); this.oops = '';
       if (e.notes.every((n) => this.hit.has(n))) this.advance();
@@ -366,7 +375,7 @@ export class SongLesson {
     take.forEach((x, i) => {
       if (i) t += Math.min(1000, Math.max(60, x.at - take[i - 1].at));
       const next = take[i + 1], len = next ? Math.min(700, Math.max(120, next.at - x.at)) : 700;
-      this.timers.push(setTimeout(() => { this.app.engine.noteOn(this.app.cur, x.n, 90); this.mark([x.n], 'g-play'); }, t));
+      this.timers.push(setTimeout(() => { this.app.engine.noteOn(this.app.cur, x.n, x.v || this.app.s.global.velocity); this.mark([x.n], 'g-play'); }, t));
       this.timers.push(setTimeout(() => { this.app.engine.noteOff(this.app.cur, x.n); this.unmark('g-play'); }, t + len));
     });
     this.timers.push(setTimeout(() => { this.replaying = false; this.show(); }, t + 800));
