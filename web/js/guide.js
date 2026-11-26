@@ -34,6 +34,12 @@ export class Guide {
     this.launcher = el('button', 'guide-launch', document.body, '<span>?</span><b>Learn</b>');
     this.launcher.setAttribute('aria-label', 'Open lessons');
     this.launcher.addEventListener('click', () => (this.lesson || this.songLesson ? this.stop() : this.menu()));
+    // the same Learn button, drawn on the device screen before power-on (app.draw paints it)
+    const bez = document.querySelector('.bezel');
+    this.screenBtn = el('button', 'screen-learn', bez || document.body);
+    this.screenBtn.setAttribute('aria-label', 'Learn: open lessons');
+    this.screenBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.screenBtn.addEventListener('click', () => this.menu());
     window.addEventListener('resize', () => { this.lastKey = ''; });
     if (new URLSearchParams(location.search).get('guide')) setTimeout(() => this.menu(), 300);
   }
