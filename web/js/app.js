@@ -20,7 +20,7 @@ const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const noteName = (n) => NOTE[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
 const CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-+./&#!'()";
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-export const APP_VERSION = 'v17';
+export const APP_VERSION = 'v18';
 const BASE_NOTE = 53; // lowest key is F3 on the stock unit
 const CUT_PTS = [[0, 100], [20, 279], [25, 365], [40, 812], [50, 1373], [60, 2285], [75, 4777], [80, 6065], [100, 15104], [107, 20000]];
 const cutoffHz = (c) => {
@@ -932,10 +932,13 @@ export class App {
         else if (label === 'MONO') state = pt.mono ? 'on' : 'slow';
         else if (label === 'POLY') state = pt.mono ? 'slow' : 'on';
       } else {
-        if (st && st.notes[note]) state = 'on';
+        // in a lesson the guide's own glows say which keys matter, so the
+        // sequencer's step chase and other voices' notes stay dark
+        const quiet = this.guide && (this.guide.lesson || this.guide.songLesson);
+        if (!quiet && st && st.notes[note]) state = 'on';
         if (this.heldKeys.has(i)) state = 'on';
-        if (this.seqOn && st && st.seqStep >= 0 && i === st.seqStep % 16) state = 'on';
-        if (st && st.leds[i]) state = 'on';
+        if (!quiet && this.seqOn && st && st.seqStep >= 0 && i === st.seqStep % 16) state = 'on';
+        if (!quiet && st && st.leds[i]) state = 'on';
       }
       pn.setLed('KEY' + i, state);
       if (k.labelCache !== label) { k.labelCache = label; pn.setKeyLabel(i, label); }

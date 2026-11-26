@@ -502,6 +502,24 @@ export class Guide {
     const rd = this.card.querySelector('.g-redo'); if (rd) rd.onclick = () => { st.redo(app); this.lastKey = ''; };
   }
 
+  // an arc of light round a knob: it points the way to turn, and gets
+  // shorter the closer the value is to the goal
+  arc(hint, size) {
+    const right = String(hint).includes('↻'), d = hint.d;
+    const span = d == null ? 110 : 30 + 220 * Math.min(Math.abs(d), 12) / 12;
+    const R = size / 2 + 9, c = R + 6, a0 = -90, a1 = a0 + (right ? span : -span);
+    const pt = (a) => [c + R * Math.cos(a * Math.PI / 180), c + R * Math.sin(a * Math.PI / 180)];
+    const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+    const tip = pt(a1 + (right ? 9 : -9)), back = (a) => [c + (R + 7 * a) * Math.cos(a1 * Math.PI / 180), c + (R + 7 * a) * Math.sin(a1 * Math.PI / 180)];
+    const [bx0, by0] = back(1), [bx1, by1] = back(-1);
+    const svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('class', 'g-arc'); svg.setAttribute('width', 2 * c); svg.setAttribute('height', 2 * c);
+    svg.style.left = (size / 2 - c) + 'px'; svg.style.top = (size / 2 - c) + 'px';
+    svg.innerHTML = `<path d="M${x0} ${y0} A${R} ${R} 0 ${span > 180 ? 1 : 0} ${right ? 1 : 0} ${x1} ${y1}" fill="none" stroke="#ffb562" stroke-width="5" stroke-linecap="round"/>
+      <path d="M${bx0} ${by0} L${tip[0]} ${tip[1]} L${bx1} ${by1} Z" fill="#ffb562"/>`;
+    return svg;
+  }
+
   clearHighlights() { this.svg.innerHTML = ''; this.rings.innerHTML = ''; this.ringKey = ''; }
 
   // dim everything except the targets, ring each target, and park the card
@@ -510,7 +528,7 @@ export class Guide {
     const vw = window.innerWidth, vh = window.innerHeight;
     const rects = targets.map((t) => t.getBoundingClientRect());
     const hint = st.hint ? (typeof st.hint === 'function' ? st.hint(this.app) : st.hint) : '';
-    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + ok + vw + vh + this.demoing + !!this.activeReq;
+    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + (hint && hint.d != null ? hint.d : '') + ok + vw + vh + this.demoing + !!this.activeReq;
     if (rk !== this.ringKey) {
       this.ringKey = rk;
       const pad = 8;
@@ -528,7 +546,8 @@ export class Guide {
         g.style.left = r.x - pad + 'px'; g.style.top = r.y - pad + 'px';
         g.style.width = r.width + pad * 2 + 'px'; g.style.height = r.height + pad * 2 + 'px';
         g.style.borderRadius = Math.min(r.width, r.height) / 2 + pad + 'px';
-        if (hint && n === 0) el('span', 'g-hint', g, hint);
+        if (hint && n === 0) el('span', 'g-hint', g, String(hint));
+        if (hint && n === 0 && !ok && targets[0].matches('.enc, .pot-knob')) g.appendChild(this.arc(hint, r.width + pad * 2));
       });
     }
   }

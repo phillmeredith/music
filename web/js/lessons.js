@@ -7,7 +7,8 @@ import { T, H } from './guide-kit.js';
 
 const sv = H.sv;
 const RATE = ['1/1', '1/2', '1/4', '1/4T', '1/8', '1/8T', '1/16', '1/16T', '1/32'];
-const turn = (cur, goal) => (cur < goal ? 'turn right ↻' : 'turn left ↺');
+// the hint text, which also carries how far there is to go (the guide draws it as an arc)
+const turn = (cur, goal) => { const text = cur < goal ? 'turn right ↻' : 'turn left ↺'; return { d: goal - cur, toString: () => text }; };
 const eq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const nn = (n) => NOTE[n % 12] + (Math.floor(n / 12) - 1);
