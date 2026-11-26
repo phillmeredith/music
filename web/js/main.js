@@ -22,4 +22,12 @@ document.addEventListener('visibilitychange', () => {
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch((err) => console.warn('service worker failed', err));
+  // a new version took over: reload straight away if nothing is playing yet,
+  // otherwise say so, so a fix never waits for a second restart
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if (!app.powered) location.reload();
+    else app.toast('Update ready: close and reopen to get it', 4000);
+  });
 }
