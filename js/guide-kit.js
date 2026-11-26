@@ -21,3 +21,13 @@ export const H = {
   arrLen(app) { const d = app.seqDump; return d ? d[16 * 1032 + 64] || 4 : 4; },
   P,
 };
+
+// kind words for a wrong key: never a telling-off
+export const TRY_AGAIN = [
+  'Oops, not that one. Try a green key 🙂',
+  'So close! Have another go.',
+  'No worries. Look for the green glow.',
+  'Nearly! Try again, you’ve got this.',
+  'That’s OK, mistakes help you learn. Try again!',
+];
+export const tryAgain = () => TRY_AGAIN[Math.floor(Math.random() * TRY_AGAIN.length)];
