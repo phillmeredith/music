@@ -82,6 +82,7 @@ function rec(section, pat, step, keys, notes, oct, text, why) {
     section, why,
     text,
     target: keys.map(T.key),
+    demo: { keys, oct },   // the guide plays it first (white), then it's his turn (green); other keys are blocked
     requires: [...seqPage(0), R.pattern(pat), R.octave(oct), R.recOn],
     onEnter: (a) => { a.engine.set(P.P_SEQ_CURSOR, step); a.seqVals[P.P_SEQ_CURSOR] = step; },
     done: (a) => (notes ? eq(H.stepNotes(a, pat, step), notes) : H.stepNotes(a, pat, step).length > 0) && a.heldKeys.size === 0,
@@ -90,7 +91,7 @@ function rec(section, pat, step, keys, notes, oct, text, why) {
     wrong: (a) => {
       if (!notes || a.heldKeys.size) return '';
       const n = H.stepNotes(a, pat, step);
-      return n.length && !eq(n, notes) ? 'Not quite the right keys. Tap “Redo this step” and try again.' : '';
+      return n.length && !eq(n, notes) ? 'Not quite the right keys. Tap Redo and have another go.' : '';
     },
     redo: (a) => { a.engine.seqCmd(1, pat, step); a.engine.set(P.P_SEQ_CURSOR, step); a.seqVals[P.P_SEQ_CURSOR] = step; a.captureSeqSoon(); },
   };
@@ -105,7 +106,7 @@ function skipTo(section, pat, step, why) {
     done: (a) => sv(a, P.P_SEQ_CURSOR) === step,
     now: (a) => `On step ${sv(a, P.P_SEQ_CURSOR) + 1}`,
     goal: `Step ${step + 1}`,
-    wrong: (a) => (sv(a, P.P_SEQ_CURSOR) > step ? 'Gone past it. Tap “Redo this step” to jump back.' : ''),
+    wrong: (a) => (sv(a, P.P_SEQ_CURSOR) > step ? 'Gone past it. Tap Redo to jump back.' : ''),
     redo: (a) => { a.engine.set(P.P_SEQ_CURSOR, step); a.seqVals[P.P_SEQ_CURSOR] = step; },
     quick: true,
   };
@@ -145,6 +146,15 @@ const playHere = (section, text, why) => ({
 const stopHere = (section) => ({
   section, text: 'Have a listen. Press PLAY/STOP when you’re ready to move on', target: T.btn('PLAY'),
   done: (a) => !sv(a, P.P_SEQ_PLAY),
+});
+
+// after each part: it plays what was just recorded, then Continue, or Start over
+// (clears that pattern and goes back to the start of the part)
+const checkpoint = (section, pat, why) => ({
+  section, check: { pat }, text: 'Listen to what you made', target: T.btn('PLAY'),
+  why: why || 'Happy with it? Press Continue. Want another go? Press Start over.',
+  onEnter: (a) => { if (a.seqOn && !sv(a, P.P_SEQ_REC) && sv(a, P.P_SEQ_PATTERN) === pat) a.setSeqPlay(1); },
+  done: () => false,
 });
 
 // ---------- the lofi lesson
@@ -201,8 +211,7 @@ const lofi = {
       `Chord ${i + 1}: hold the 4 glowing keys together, then let go`,
       i === 0 ? `This is ${c.name}. Keep all four keys down at once, then lift your hand.` : `${c.name}. Same again: all four, then let go.`)),
     { section: S2, text: 'Press REC to stop recording', target: T.btn('REC'), done: (a) => !sv(a, P.P_SEQ_REC) },
-    playHere(S2, 'Press PLAY/STOP to hear your chords', 'Four chords that slide down step by step. That’s the heart of the song.'),
-    stopHere(S2),
+    checkpoint(S2, 0, 'Four chords that slide down step by step. That’s the heart of the song.'),
 
     // 3 bass: pattern 2 on voice 2
     seqKnob(S3, { page: 0, knob: 1, label: 'Pattern', id: P.P_SEQ_PATTERN, goal: 1, fmt: (x) => x + 1, extra: [R.stopped, R.recOff],
@@ -222,6 +231,7 @@ const lofi = {
     { section: S3, text: 'Press REC to stop recording', target: T.btn('REC'), done: (a) => !sv(a, P.P_SEQ_REC) },
     { section: S3, text: 'Press OCT- and OCT+ together to reset the octave', target: [T.btn('OCTDN'), T.btn('OCTUP')],
       why: 'Pressing both at once is a shortcut back to normal.', done: (a) => a.s.ui.octave === 0 && a.s.ui.transpose === 0 },
+    checkpoint(S3, 1, 'The bass follows the chords, one deep note each.'),
 
     // 4 kick: pattern 3 on voice 3, 16 steps of 1/16
     seqKnob(S4, { page: 0, knob: 1, label: 'Pattern', id: P.P_SEQ_PATTERN, goal: 2, fmt: (x) => x + 1, extra: [R.stopped, R.recOff],
@@ -238,6 +248,7 @@ const lofi = {
     skipTo(S4, 2, 10, ''),
     rec(S4, 2, 10, [0], null, 0, 'And one more: kick on step 11', 'That off-beat kick gives it the lazy bounce.'),
     { section: S4, text: 'Press REC to stop recording', target: T.btn('REC'), done: (a) => !sv(a, P.P_SEQ_REC) },
+    checkpoint(S4, 2, 'Boom … boom-boom. The kick is the heartbeat.'),
 
     // 5 snare: pattern 4 on voice 4
     seqKnob(S5, { page: 0, knob: 1, label: 'Pattern', id: P.P_SEQ_PATTERN, goal: 3, fmt: (x) => x + 1, extra: [R.stopped, R.recOff] }),
@@ -249,6 +260,7 @@ const lofi = {
     skipTo(S5, 3, 12, ''),
     rec(S5, 3, 12, [7], null, 0, 'Snare on step 13', 'Step 13 is beat 4.'),
     { section: S5, text: 'Press REC to stop recording', target: T.btn('REC'), done: (a) => !sv(a, P.P_SEQ_REC) },
+    checkpoint(S5, 3, 'The snare answers the kick on beats 2 and 4.'),
 
     // 6 hats: pattern 5 on voice 5, eighth notes with swing
     seqKnob(S6, { page: 0, knob: 1, label: 'Pattern', id: P.P_SEQ_PATTERN, goal: 4, fmt: (x) => x + 1, extra: [R.stopped, R.recOff] }),
@@ -268,6 +280,7 @@ const lofi = {
     { ...seqKnob(S6, { page: 2, knob: 1, label: 'Swing', id: P.P_SEQ_SWING, goal: 60, fmt: (x) => x + '%', extra: [R.pattern(4)],
       why: 'Swing makes every second hi-hat a little late. That’s the lazy, head-nodding feel.' }),
     done: (a) => sv(a, P.P_SEQ_SWING) >= 58 && sv(a, P.P_SEQ_SWING) <= 64, goal: 'Swing: 58% to 64%' },
+    checkpoint(S6, 4, 'Ticking hi-hats with a lazy swing.'),
 
     // 7 song: arrangement rows are voices, columns are sections
     { section: S7, text: 'Turn SELECT back to page 1', target: T.knob('SELECT'), requires: [R.seq, R.steps],

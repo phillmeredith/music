@@ -4,6 +4,8 @@
 // Steps check what the synth is doing, not which button was pressed, so any
 // route to the right result counts, and a wrong turn shows how to get back.
 import { LESSONS } from './lessons.js';
+import { P } from './params.js';
+import { tryAgain } from './guide-kit.js';
 import { SongLesson, makeSong, events, parseMidi, sequencerToSong, loadSongs, saveSong, deleteSong, syncSongs, unlockLibrary, libraryState } from './song.js';
 import { BUILTIN_SONGS } from './songs-builtin.js';
 import { decodeFile, transcribe } from './transcribe.js';
@@ -18,6 +20,7 @@ const el = (tag, cls, parent, html) => {
   return e;
 };
 const SVGNS = 'http://www.w3.org/2000/svg';
+
 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Guide {
@@ -337,9 +340,32 @@ export class Guide {
     const st = this.step();
     this.doneAt = 0; this.okUntil = 0; this.lastKey = ''; this.wrongShown = false;
     if (st && st.onEnter) st.onEnter(this.app, this);
+    this.oops = ''; this.demoing = false; clearTimeout(this.demoT);
+    if (st && st.demo) this.startDemo(st);
     this.renderCard(true);
   }
   step() { return this.lesson && this.lesson.steps[this.i]; }
+
+  // play the step's keys with a white glow, then hand over with a green one
+  startDemo(st) {
+    const a = this.app, notes = st.demo.keys.map((k) => 53 + k + 12 * st.demo.oct);
+    const c = a.engine.ctx; if (c && c.state !== 'running') c.resume().catch(() => {});
+    this.demoing = true; this.ringKey = ''; this.lastKey = '';
+    clearTimeout(this.demoT); clearTimeout(this.demoOffT); clearTimeout(this.demoEnd);
+    this.demoT = setTimeout(() => notes.forEach((n) => a.engine.noteOn(a.cur, n, 85)), 350);
+    this.demoOffT = setTimeout(() => notes.forEach((n) => a.engine.noteOff(a.cur, n)), 1450);
+    this.demoEnd = setTimeout(() => { this.demoing = false; this.ringKey = ''; this.lastKey = ''; }, 1900);
+  }
+  // a key press during a "your turn" step: wrong keys flash red and aren't played
+  blockKey(idx) {
+    const st = this.step();
+    if (!this.lesson || !st || !st.demo || this.activeReq) return false;
+    if (st.demo.keys.includes(idx)) { if (this.oops) { this.oops = ''; this.lastKey = ''; } return false; }
+    const k = document.querySelector(`.key[data-idx="${idx}"]`);
+    if (k) { k.classList.remove('g-bad'); void k.offsetWidth; k.classList.add('g-bad'); setTimeout(() => k.classList.remove('g-bad'), 450); }
+    this.oops = tryAgain(); this.lastKey = '';
+    return true;
+  }
   go(d) {
     if (!this.lesson) return;
     this.i = Math.max(0, Math.min(this.lesson.steps.length - 1, this.i + d));
@@ -410,7 +436,7 @@ export class Guide {
     const app = this.app;
     const live = active.now ? active.now(app) : '';
     const wrong = !ok && st.wrong && !req ? st.wrong(app) : '';
-    const key = [this.i, req ? req.text : '', live, wrong, ok].join('|');
+    const key = [this.i, req ? req.text : '', live, wrong, ok, st.check ? app.seqVals[P.P_SEQ_PLAY] : '', this.demoing, this.oops].join('|');
     if (!force && key === this.lastKey) return;
     this.lastKey = key;
     const n = this.lesson.steps.length, pct = Math.round((this.i / (n - 1)) * 100);
@@ -418,7 +444,9 @@ export class Guide {
     const why = !req && st.why ? `<p class="g-why">${st.why}</p>` : '';
     const goal = !req && st.goal ? `<div class="g-goal"><span>Goal</span>${st.goal}</div>` : '';
     const nowLine = live ? `<div class="g-now ${ok ? 'ok' : ''}"><span>Now</span>${live}</div>` : '';
-    const redo = st.redo && !req ? '<button class="g-redo">Redo this step</button>' : '';
+    const redo = st.redo && !req ? '<button class="g-redo">Redo</button>' : '';
+    const demo = st.demo && !req;
+    const shown = demo ? (this.demoing ? '👀 Watch and listen…' : 'Now your turn! ' + text.replace(/glowing/g, 'green')) : text;
     this.card.className = 'guide-card' + (ok ? ' ok' : '') + (req ? ' fix' : '') + (st.final ? ' centre' : '');
     this.card.innerHTML = `
       <div class="g-head">
@@ -428,16 +456,35 @@ export class Guide {
       </div>
       <div class="g-bar"><i style="width:${pct}%"></i></div>
       ${req ? '<div class="g-oops">First:</div>' : ''}
-      <h3>${ok ? '✓ ' : ''}${text}</h3>
+      <h3>${ok ? '✓ ' : ''}${shown}</h3>
+      ${demo && this.oops && !ok ? `<p class="g-try">${this.oops}</p>` : ''}
       ${nowLine}${goal}${why}
       ${wrong ? `<p class="g-warn">${wrong}</p>` : ''}
-      <div class="g-row">
+      ${st.check ? `<div class="g-row"><button class="g-hearme">${app.seqVals[P.P_SEQ_PLAY] ? 'Stop' : 'Hear it'}</button></div>
+      <div class="g-row"><button class="g-again">Start over</button><button class="g-go g-cont">Continue</button></div>` : `<div class="g-row">
         <button class="g-back" ${this.i === 0 ? 'disabled' : ''}>Back</button>
-        ${redo}
+        ${demo ? '<button class="g-showme">Show me</button>' : ''}${redo}
         ${st.final ? '<button class="g-go g-end">Done</button>' : '<button class="g-skip">Skip</button>'}
-      </div>`;
+      </div>`}`;
     this.card.querySelector('.g-x').onclick = () => this.stop();
-    this.card.querySelector('.g-back').onclick = () => this.go(-1);
+    const bk = this.card.querySelector('.g-back'); if (bk) bk.onclick = () => this.go(-1);
+    const sm = this.card.querySelector('.g-showme'); if (sm) sm.onclick = () => { this.oops = ''; this.startDemo(st); };
+    if (st.check) {
+      const pat = st.check.pat;
+      this.card.querySelector('.g-hearme').onclick = () => {
+        if (app.seqVals[P.P_SEQ_PLAY]) app.setSeqPlay(0);
+        else { if (!app.seqOn) app.toggleSeq(); app.setSeqPlay(1); }
+        this.lastKey = ''; this.renderCard(true);
+      };
+      this.card.querySelector('.g-cont').onclick = () => { app.setSeqPlay(0); this.go(1); };
+      this.card.querySelector('.g-again').onclick = () => {
+        app.setSeqPlay(0);
+        if (app.seqVals[P.P_SEQ_REC]) { app.engine.set(P.P_SEQ_REC, 0); app.seqVals[P.P_SEQ_REC] = 0; }
+        app.engine.seqCmd(2, pat); app.s.dirty.pattern = true; app.captureSeqSoon && app.captureSeqSoon();
+        const first = this.lesson.steps.findIndex((x) => x.section === st.section);
+        this.i = Math.max(0, first); this.enter();
+      };
+    }
     const sk = this.card.querySelector('.g-skip'); if (sk) sk.onclick = () => this.go(1);
     const end = this.card.querySelector('.g-end'); if (end) end.onclick = () => this.stop();
     const rd = this.card.querySelector('.g-redo'); if (rd) rd.onclick = () => { st.redo(app); this.lastKey = ''; };
@@ -451,7 +498,7 @@ export class Guide {
     const vw = window.innerWidth, vh = window.innerHeight;
     const rects = targets.map((t) => t.getBoundingClientRect());
     const hint = st.hint ? (typeof st.hint === 'function' ? st.hint(this.app) : st.hint) : '';
-    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + ok + vw + vh;
+    const rk = rects.map((r) => [r.x, r.y, r.width, r.height].map(Math.round).join(',')).join(';') + '|' + hint + ok + vw + vh + this.demoing + !!this.activeReq;
     if (rk !== this.ringKey) {
       this.ringKey = rk;
       const pad = 8;
@@ -464,7 +511,8 @@ export class Guide {
         <rect width="${vw}" height="${vh}" fill="rgba(20,14,8,.42)" mask="url(#g-mask)"/>`;
       this.rings.innerHTML = '';
       rects.forEach((r, n) => {
-        const g = el('div', 'g-ring' + (ok ? ' ok' : ''), this.rings);
+        const keyStep = st.demo && !this.activeReq;
+        const g = el('div', 'g-ring' + (ok ? ' ok' : keyStep ? (this.demoing ? ' demo' : ' turn') : ''), this.rings);
         g.style.left = r.x - pad + 'px'; g.style.top = r.y - pad + 'px';
         g.style.width = r.width + pad * 2 + 'px'; g.style.height = r.height + pad * 2 + 'px';
         g.style.borderRadius = Math.min(r.width, r.height) / 2 + pad + 'px';

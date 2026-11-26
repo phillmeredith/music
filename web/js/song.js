@@ -5,6 +5,7 @@
 // press them, flashing a wrong key red. At the end it can write the song into
 // the sequencer as a beat.
 import { P } from './params.js';
+import { tryAgain } from './guide-kit.js';
 
 const LOW = 53, KEYS = 27;                       // F3, 27 keys
 const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -261,6 +262,7 @@ export class SongLesson {
     this.mode = 'listen'; this.slow = false; this.whole = false;
     this.timers = [];
     this.marks = new Set();
+    this.take = [];
   }
 
   start() {
@@ -278,8 +280,9 @@ export class SongLesson {
 
   // ----- phrase playback
   clearTimers() { this.timers.forEach(clearTimeout); this.timers = []; }
-  listen() {
-    this.clearTimers(); this.mode = 'listen'; this.k = 0; this.hit.clear();
+  listen(hearOnly = false) {
+    this.clearTimers(); this.app.engine.panic(); this.clearMarks();
+    if (!hearOnly) { this.mode = 'listen'; this.k = 0; this.hit.clear(); }
     const idx = this.ph[this.p], sp = this.slow ? 1.6 : 1;
     const t0 = this.ev[idx[0]].t;
     idx.forEach((i) => {
@@ -294,7 +297,8 @@ export class SongLesson {
       }, at + Math.min(e.d, 1.2) * sp * 1000));
     });
     const last = this.ev[idx[idx.length - 1]];
-    this.timers.push(setTimeout(() => { this.mode = 'play'; this.show(); }, (last.t - t0) * sp * 1000 + Math.min(last.d, 1.2) * sp * 1000 + 500));
+    if (hearOnly) return;
+    this.timers.push(setTimeout(() => { this.startPlay(); this.show(); }, (last.t - t0) * sp * 1000 + Math.min(last.d, 1.2) * sp * 1000 + 500));
     this.show();
   }
 
@@ -319,53 +323,79 @@ export class SongLesson {
   onKey(idx, ev, note) {
     if (ev !== 'down' || this.mode !== 'play') return;
     const e = this.cur(); if (!e) return;
+    this.take.push({ at: performance.now(), n: note });
     if (e.notes.includes(note)) {
-      this.hit.add(note);
+      this.hit.add(note); this.oops = '';
       if (e.notes.every((n) => this.hit.has(n))) this.advance();
       else this.showKeys();
     } else {
       const k = document.querySelector(`.key[data-idx="${idx}"]`);
-      if (k) { k.classList.add('g-bad'); this.marks.add(k); setTimeout(() => k.classList.remove('g-bad'), 350); }
+      if (k) { k.classList.remove('g-bad'); void k.offsetWidth; k.classList.add('g-bad'); this.marks.add(k); setTimeout(() => k.classList.remove('g-bad'), 450); }
       this.misses = (this.misses || 0) + 1;
+      this.oops = tryAgain(); this.show();
     }
   }
   advance() {
     this.hit.clear();
     this.k++;
     if (this.k < this.ph[this.p].length) { this.showKeys(); this.show(); return; }
-    // phrase done
-    this.mode = 'done'; this.clearMarks();
+    // phrase done: in Play all keep going; otherwise play back what he played,
+    // then he chooses Continue or Start over
     this.app.fb.saved && this.app.fb.saved();
+    if (this.whole) { this.mode = 'done'; this.clearMarks(); this.show(); this.timers.push(setTimeout(() => this.nextPhrase(), 900)); return; }
+    this.mode = 'review'; this.clearMarks();
+    this.timers.push(setTimeout(() => this.playTake(), 500));
     this.show();
-    this.timers.push(setTimeout(() => this.nextPhrase(), 1100));
   }
   nextPhrase() {
-    if (this.whole) { this.p++; if (this.p >= this.ph.length) return this.finish(); this.k = 0; this.mode = 'play'; this.show(); return; }
+    if (this.whole) { this.p++; if (this.p >= this.ph.length) return this.finish(); this.startPlay(true); this.show(); return; }
     this.p++;
     if (this.p >= this.ph.length) return this.finish();
     this.listen();
   }
   finish() { this.mode = 'end'; this.clearMarks(); this.show(); }
+  startPlay(keepTake) { this.mode = 'play'; this.k = 0; this.hit.clear(); if (!keepTake) this.take = []; }
+
+  // play back his own presses with his timing (long pauses shortened)
+  playTake() {
+    this.clearTimers(); this.app.engine.panic();
+    const take = this.take || []; if (!take.length) return;
+    this.replaying = true; this.show();
+    let t = 0;
+    take.forEach((x, i) => {
+      if (i) t += Math.min(1000, Math.max(60, x.at - take[i - 1].at));
+      const next = take[i + 1], len = next ? Math.min(700, Math.max(120, next.at - x.at)) : 700;
+      this.timers.push(setTimeout(() => { this.app.engine.noteOn(this.app.cur, x.n, 90); this.mark([x.n], 'g-play'); }, t));
+      this.timers.push(setTimeout(() => { this.app.engine.noteOff(this.app.cur, x.n); this.unmark('g-play'); }, t + len));
+    });
+    this.timers.push(setTimeout(() => { this.replaying = false; this.show(); }, t + 800));
+  }
 
   // ----- card
   show() {
     this.showKeys();
-    const n = this.ph.length, pct = Math.round(((this.p + (this.mode === 'done' ? 1 : 0)) / n) * 100);
+    const n = this.ph.length, pct = Math.round(((this.p + (this.mode === 'done' || this.mode === 'review' ? 1 : 0)) / n) * 100);
     const e = this.cur();
     const titles = {
-      listen: '👂 Listen…',
-      play: this.whole ? 'Play along: press the glowing keys' : 'Your turn: press the glowing keys',
+      listen: '👀 Watch the white keys and listen…',
+      play: this.whole ? 'Play along: press the green keys' : 'Now your turn! Press the green keys',
       done: '✓ Nice!',
+      review: this.replaying ? '🔊 Here’s what you played…' : '✓ You played part ' + (this.p + 1) + '!',
       end: this.whole ? 'You played the whole song!' : 'You learned every part!',
     };
     let body = '';
-    if (this.mode === 'listen') body = '<p class="g-why">Watch the keys light up as it plays.</p>';
-    if (this.mode === 'play' && e) body = `<div class="g-now"><span>Next</span>${e.notes.map(noteName).join(' + ')}${e.notes.length > 1 ? ' together' : ''}</div><p class="g-why">The faint glow shows what comes after.</p>`;
+    if (this.mode === 'listen') body = '<p class="g-why">Then it’s your turn to play it back.</p>';
+    if (this.mode === 'play' && e) body = `<div class="g-now"><span>Next</span>${e.notes.map(noteName).join(' + ')}${e.notes.length > 1 ? ' together' : ''}</div>${this.oops ? `<p class="g-try">${this.oops}</p>` : '<p class="g-why">The faint glow shows what comes after.</p>'}`;
+    if (this.mode === 'review') body = `<p class="g-why">${this.replaying ? 'Listen back to how it sounded.' : 'Happy with it? Carry on, or have another go.'}</p>`;
     if (this.mode === 'end') body = '<p class="g-why">Play it all the way through with the lights, or turn it into a beat in the sequencer and build drums around it.</p>';
-    const row = this.mode === 'end'
-      ? `<div class="g-row"><button class="g-whole">Play all</button><button class="g-seq g-go">Make it a beat</button></div>`
+    const mine = this.take && this.take.length ? '<button class="g-mine">Hear mine</button>' : '';
+    const row = this.mode === 'review'
+      ? `<div class="g-row">${mine}<button class="g-again">Hear original</button></div>
+         <div class="g-row"><button class="g-retry">Start over</button><button class="g-go g-next">${this.p + 1 >= n ? 'Finish' : 'Continue'}</button></div>`
+      : this.mode === 'end'
+      ? `${this.whole ? `<div class="g-row">${mine}<button class="g-retry">Play again</button></div>` : ''}<div class="g-row"><button class="g-whole">Play all</button><button class="g-seq g-go">Make it a beat</button></div>`
       : `<div class="g-row"><button class="g-back" ${this.p === 0 ? 'disabled' : ''}>Back</button><button class="g-again">Hear it</button><button class="g-slow">${this.slow ? 'Normal' : 'Slow'}</button><button class="g-skip">Skip</button></div>`;
-    this.card.className = 'guide-card song' + (this.mode === 'done' || this.mode === 'end' ? ' ok' : '');
+    this.card.className = 'guide-card song' + (this.mode === 'done' || this.mode === 'end' || this.mode === 'review' ? ' ok' : '');
     this.card.innerHTML = `
       <div class="g-head"><span class="g-sec">${String(this.song.title).replace(/[&<>"]/g, "")}</span><span class="g-count">${this.whole ? 'Whole song' : `Part ${Math.min(this.p + 1, n)} / ${n}`}</span><button class="g-x" aria-label="Close">✕</button></div>
       <div class="g-bar"><i style="width:${this.mode === 'end' ? 100 : pct}%"></i></div>
@@ -373,10 +403,13 @@ export class SongLesson {
     const on = (sel, fn) => { const b = this.card.querySelector(sel); if (b) b.onclick = fn; };
     on('.g-x', () => this.onExit());
     on('.g-back', () => { this.p = Math.max(0, this.p - 1); this.whole = false; this.listen(); });
-    on('.g-again', () => { this.whole = false; this.listen(); });
+    on('.g-again', () => { this.replaying = false; if (this.mode === 'review') this.listen(true); else { this.whole = false; this.listen(); } });
     on('.g-slow', () => { this.slow = !this.slow; this.listen(); });
     on('.g-skip', () => { this.clearTimers(); this.nextPhrase(); });
-    on('.g-whole', () => { this.whole = true; this.p = 0; this.k = 0; this.mode = 'play'; this.show(); });
+    on('.g-whole', () => { this.whole = true; this.p = 0; this.startPlay(); this.show(); });
+    on('.g-mine', () => this.playTake());
+    on('.g-retry', () => { this.clearTimers(); this.app.engine.panic(); if (this.mode === 'end') { this.whole = true; this.p = 0; this.startPlay(); this.show(); } else this.listen(); });
+    on('.g-next', () => { this.clearTimers(); this.app.engine.panic(); this.replaying = false; this.nextPhrase(); });
     on('.g-seq', () => {
       const r = songToSequencer(this.app, this.song);
       if (!this.app.seqOn) this.app.toggleSeq();

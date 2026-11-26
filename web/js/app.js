@@ -453,6 +453,7 @@ export class App {
     if (keyIsFunction) return this.editKey(EDIT_KEY_LABELS[x.blackN], ev);
     if (ev === 'down') {
       if (this.overlay && this.overlay.type === 'arrrec') return;
+      if (this.guide && this.guide.blockKey(idx)) return; // a lesson's "your turn": wrong keys only flash
       const note = BASE_NOTE + idx + 12 * this.s.ui.octave + this.s.ui.transpose;
       if (note < 0 || note > 127) return;
       let vel = this.s.global.velocity;
