@@ -230,6 +230,7 @@ html, body {
   position: absolute; border: 3px solid #ffb562; box-shadow: 0 0 0 4px rgba(255,181,98,.3), 0 0 22px 6px rgba(255,170,80,.55);
   animation: g-pulse 1.3s ease-in-out infinite;
 }
+.g-arc { position: absolute; overflow: visible; pointer-events: none; filter: drop-shadow(0 0 6px rgba(255,170,80,.8)); animation: none; }
 .g-ring.demo { border-color: #ffffff; box-shadow: 0 0 0 4px rgba(255,255,255,.35), 0 0 24px 8px rgba(255,255,255,.65); }
 .g-ring.turn { border-color: #5fe07a; box-shadow: 0 0 0 4px rgba(95,224,122,.35), 0 0 24px 8px rgba(95,224,122,.6); }
 .g-try { font-size: 11px; font-weight: 800; color: #9c2f0c; margin: 4px 0; }
