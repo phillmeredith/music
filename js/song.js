@@ -271,6 +271,10 @@ export class SongLesson {
     // (other voices that are switched on would layer on top of every key)
     this.soloed = a.s.parts.map((pt) => pt.on);
     a.s.parts.forEach((pt, i) => { if (i !== a.cur && pt.on) { pt.on = 0; a.store.partParam(i, P.PP_ON, 0); } });
+    // the keys only reach voices on MIDI channel 1 or "all"; voices 2-8 default
+    // to their own channels, so open this one to all for the lesson
+    this.chWas = { part: a.cur, ch: a.part().ch };
+    if (a.part().ch !== 0) { a.part().ch = 0; a.store.partParam(a.cur, P.PP_CH, 0); }
     a.arpOff();
     if (a.seqVals[P.P_SEQ_PLAY]) a.setSeqPlay(0);
     a.seqOff();
@@ -285,6 +289,7 @@ export class SongLesson {
     const a = this.app;
     (this.soloed || []).forEach((was, i) => { if (was && !a.s.parts[i].on) { a.s.parts[i].on = 1; a.store.partParam(i, P.PP_ON, 1); } });
     this.soloed = null;
+    if (this.chWas) { const { part, ch } = this.chWas; if (a.s.parts[part].ch !== ch) { a.s.parts[part].ch = ch; a.store.partParam(part, P.PP_CH, ch); } this.chWas = null; }
   }
 
   // ----- phrase playback
